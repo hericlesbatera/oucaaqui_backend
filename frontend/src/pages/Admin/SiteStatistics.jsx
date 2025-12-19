@@ -474,7 +474,7 @@ const SiteStatistics = () => {
                   return (
                     <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4 text-gray-900">
-                        <a href={`http://localhost:3000/${album.artist?.slug}/${album.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a href={`${window.location.origin}/${album.artist?.slug}/${album.slug}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                           {album.title}
                         </a>
                       </td>
@@ -545,13 +545,13 @@ const SiteStatistics = () => {
             <div className="space-y-4">
               <input
                 type="text"
-                value={`http://localhost:3000/${selectedAlbum.artist?.slug}/${selectedAlbum.slug}`}
+                value={`${window.location.origin}/${selectedAlbum.artist?.slug}/${selectedAlbum.slug}`}
                 readOnly
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
               />
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(`http://localhost:3000/${selectedAlbum.artist?.slug}/${selectedAlbum.slug}`);
+                  navigator.clipboard.writeText(`${window.location.origin}/${selectedAlbum.artist?.slug}/${selectedAlbum.slug}`);
                   alert('Link copiado!');
                 }}
                 className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
