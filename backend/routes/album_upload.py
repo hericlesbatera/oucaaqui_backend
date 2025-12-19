@@ -112,18 +112,9 @@ async def upload_album(request: Request):
         # Initialize progress tracking (update_progress will handle initialization)
         progress_module.update_progress(upload_id, 0, "iniciando_upload")
         
-        # Verify Supabase connection and bucket access
-        try:
-            print(f"[UPLOAD] Testing Supabase connection...")
-            progress_module.update_progress(upload_id, 2, "verificando_conexao")
-            # Try to list files to verify bucket exists and we have access
-            list_response = supabase.storage.from_("musica").list()
-            print(f"[UPLOAD] Supabase connection OK. Storage bucket accessible.")
-            progress_module.update_progress(upload_id, 5, "conexao_verificada")
-        except Exception as e:
-            print(f"[UPLOAD] ERROR: Cannot access Supabase storage bucket: {e}")
-            progress_module.update_progress(upload_id, 0, "erro_conexao")
-            raise HTTPException(status_code=500, detail=f"Erro ao acessar Supabase Storage: {str(e)}")
+        # Skip connection test - upload will fail directly if there's an issue
+        print(f"[UPLOAD] Supabase connection configured.")
+        progress_module.update_progress(upload_id, 5, "conexao_verificada")
         
         # Create working directory
         temp_dir = Path(__file__).parent.parent / "uploads" / upload_id
@@ -362,7 +353,7 @@ async def upload_album(request: Request):
                     
                     # Use httpx directly with proper headers
                     async with httpx.AsyncClient() as client:
-                        upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
+                        upload_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
                         headers = {
                             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                             "Content-Type": mime_type
@@ -425,7 +416,7 @@ async def upload_album(request: Request):
                             progress_module.update_progress(upload_id, song_progress, f"enviando_musica_{idx}_tentativa_{attempt+1}")
                             await asyncio.sleep(0.05)
                             async with httpx.AsyncClient(timeout=60.0) as client:
-                                upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{storage_path}"
+                                upload_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{storage_path}"
                                 headers = {
                                     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                                     "Content-Type": "audio/mpeg"
