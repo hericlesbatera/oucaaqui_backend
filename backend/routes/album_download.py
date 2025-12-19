@@ -5,8 +5,8 @@ import os
 from dotenv import load_dotenv
 import httpx
 import io
-import zipfile
 import asyncio
+from zipstream import ZipStream
 
 load_dotenv()
 
@@ -23,42 +23,36 @@ router = APIRouter(prefix="/api/albums", tags=["album_download"])
 
 async def stream_zip(songs, album_title):
     """
-    Gera um ZIP em stream usando chunks. 
-    Yield chunks conforme as musicas sao baixadas.
+    Gera um ZIP em stream real usando zipstream.
+    Começa a enviar chunks imediatamente enquanto baixa as musicas.
     """
-    # Buffer para acumular o ZIP
-    zip_buffer = io.BytesIO()
+    # Dict com os arquivos que vao fazer parte do ZIP
+    files_dict = {}
     
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            for idx, song in enumerate(songs, 1):
-                try:
-                    if song.get('audio_url'):
-                        title = song.get('title', 'track')[:40]
-                        print(f"[ALBUM_DOWNLOAD] Baixando musica {idx}/{len(songs)}: {title}")
-                        
-                        response = await client.get(song['audio_url'], follow_redirects=True)
-                        
-                        if response.status_code == 200:
-                            track_num = song.get('track_number', idx)
-                            filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
-                            zip_file.writestr(filename, response.content)
-                            print(f"[ALBUM_DOWNLOAD]   OK ({idx}/{len(songs)}): {filename}")
-                        else:
-                            print(f"[ALBUM_DOWNLOAD]   FALHOU: status {response.status_code}")
-                except Exception as e:
-                    print(f"[ALBUM_DOWNLOAD]   ERRO: {str(e)[:50]}")
-                
-                # Dar tempo para o client processar
-                await asyncio.sleep(0)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for idx, song in enumerate(songs, 1):
+            try:
+                if song.get('audio_url'):
+                    title = song.get('title', 'track')[:40]
+                    print(f"[ALBUM_DOWNLOAD] Baixando musica {idx}/{len(songs)}: {title}")
+                    
+                    response = await client.get(song['audio_url'], follow_redirects=True)
+                    
+                    if response.status_code == 200:
+                        track_num = song.get('track_number', idx)
+                        filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
+                        files_dict[filename] = response.content
+                        print(f"[ALBUM_DOWNLOAD]   OK ({idx}/{len(songs)}): {filename}")
+                    else:
+                        print(f"[ALBUM_DOWNLOAD]   FALHOU: status {response.status_code}")
+            except Exception as e:
+                print(f"[ALBUM_DOWNLOAD]   ERRO: {str(e)[:50]}")
+            
+            await asyncio.sleep(0)
     
-    # Enviar o arquivo ZIP completo em chunks
-    zip_buffer.seek(0)
-    chunk_size = 64 * 1024  # 64KB chunks
-    while True:
-        chunk = zip_buffer.read(chunk_size)
-        if not chunk:
-            break
+    # Gerar ZIP em stream
+    zs = ZipStream(files_dict, compression=8)  # 8 = ZIP_DEFLATED
+    for chunk in zs:
         yield chunk
 
 
