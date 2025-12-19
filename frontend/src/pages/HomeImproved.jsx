@@ -661,16 +661,20 @@ const HomeImproved = () => {
                             </div>
                         </div>
                     </div>
+                    {/* Desktop - Carrossel */}
                     <div
                         ref={topCdsRef}
-                        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+                        className="hidden md:flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
                         {topCdsAlbums.length === 0 ? (
-                            <p className="text-gray-500 py-8 col-span-full">Nenhum CD disponível para este período.</p>
+                            <p className="text-gray-500 py-8">Nenhum CD disponível para este período.</p>
                         ) : (
                             topCdsAlbums.map((album, index) => (
                                 <div
                                     key={`${album.id}-${topCdsFilter}`}
+                                    className="flex-shrink-0"
+                                    style={{ width: 'calc((100% - 80px) / 6)' }}
                                 >
                                     <Link
                                         to={`/${album.artistSlug}/${album.slug || album.id}`}
@@ -725,6 +729,64 @@ const HomeImproved = () => {
                                                 ))}
                                             </>
                                         )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+                                            <span className="font-bold text-gray-700">{formatNumber(album.period_play_count || album.playCount)}</span>
+                                            <span className="text-gray-500">Plays</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+                                            <span className="font-bold text-gray-700">{formatNumber(album.downloadCount)}</span>
+                                            <span className="text-gray-500">Downloads</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    
+                    {/* Mobile - Grid */}
+                    <div className="md:hidden grid grid-cols-2 lg:grid-cols-6 gap-4">
+                        {topCdsAlbums.length === 0 ? (
+                            <p className="text-gray-500 py-8 col-span-full">Nenhum CD disponível para este período.</p>
+                        ) : (
+                            topCdsAlbums.slice(0, 6).map((album, index) => (
+                                <div
+                                    key={`${album.id}-${topCdsFilter}`}
+                                >
+                                    <Link
+                                        to={`/${album.artistSlug}/${album.slug || album.id}`}
+                                        className="group cursor-pointer block"
+                                    >
+                                        <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
+                                            <div className="absolute top-2 left-2 z-10 bg-red-600 text-white font-bold text-lg w-10 h-10 flex items-center justify-center rounded shadow-lg">
+                                                {index + 1}
+                                            </div>
+                                            <img
+                                                src={album.coverImage}
+                                                alt={album.title}
+                                                className="w-full aspect-square object-cover transform group-hover:scale-110 transition-transform duration-300"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
+                                                <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all duration-300">
+                                                    <Play className="w-5 h-5 text-white ml-1" fill="white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-black font-semibold text-sm mb-1 truncate group-hover:text-red-600 transition-colors">
+                                            {album.title}
+                                        </h3>
+                                    </Link>
+                                    <div className="flex items-center gap-1 text-gray-600 text-xs mb-2 flex-wrap">
+                                        <Link
+                                            to={`/${album.artistSlug}`}
+                                            className="flex items-center gap-0.5 hover:text-red-600 transition-colors"
+                                        >
+                                            <span>{album.artistName}</span>
+                                            {album.artistVerified && (
+                                                <BadgeCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                                            )}
+                                        </Link>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs">
                                         <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
