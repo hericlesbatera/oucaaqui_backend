@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pathlib import Path
 from routes.albums import router as albums_router
 from routes.album_upload import router as album_upload_router
@@ -40,3 +41,11 @@ def health_check():
 public_path = Path(__file__).parent / "public"
 if public_path.exists():
     app.mount("/", StaticFiles(directory=str(public_path), html=True), name="static")
+
+# Catch-all route para SPA - serve index.html para rotas desconhecidas
+@app.get("/{path_name:path}")
+async def serve_spa(path_name: str):
+    index_path = public_path / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"detail": "Not Found"}
