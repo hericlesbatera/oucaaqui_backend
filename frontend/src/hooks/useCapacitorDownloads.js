@@ -5,9 +5,17 @@ import { Preferences } from '@capacitor/preferences';
 const DOWNLOADS_DIR = 'downloads';
 const METADATA_KEY = 'downloads_metadata';
 
-// Verificar se está em ambiente Capacitor
+// Verificar se está em ambiente Capacitor mobile
 const isCapacitorAvailable = () => {
-    return typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isPluginAvailable('Filesystem');
+    if (typeof window === 'undefined') return false;
+    
+    const hasCapacitor = window.Capacitor !== undefined;
+    if (!hasCapacitor) return false;
+    
+    const platform = window.Capacitor.getPlatform?.();
+    const isNativeApp = platform === 'android' || platform === 'ios';
+    
+    return isNativeApp;
 };
 
 // Salvar metadados em cache local
@@ -62,6 +70,11 @@ const downloadFile = async (url, fileName, albumDir) => {
 
         const blob = await response.blob();
         const base64Data = await blobToBase64(blob);
+        
+        // Remove o prefixo data:audio/mpeg;base64, se existir
+        const cleanBase64 = base64Data.includes(',') 
+            ? base64Data.split(',')[1] 
+            : base64Data;
 
         // Criar pasta do álbum
         const albumPath = `${DOWNLOADS_DIR}/${albumDir}`;
@@ -71,14 +84,18 @@ const downloadFile = async (url, fileName, albumDir) => {
             recursive: true
         });
 
-        // Salvar arquivo
+        // Salvar arquivo em base64
+        const filePath = `${albumPath}/${fileName}`;
+        console.log(`📝 Salvando arquivo: ${filePath}`);
+        
         await Filesystem.writeFile({
-            path: `${albumPath}/${fileName}`,
-            data: base64Data,
+            path: filePath,
+            data: cleanBase64,
             directory: Directory.Documents,
-            encoding: Encoding.UTF8
+            encoding: Encoding.Base64
         });
 
+        console.log(`✅ Arquivo salvo com sucesso: ${filePath}`);
         return true;
     } catch (error) {
         console.error(`Erro ao baixar arquivo ${fileName}:`, error);

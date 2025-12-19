@@ -4,7 +4,19 @@
 
 export const isMobileApp = () => {
     if (typeof window === 'undefined') return false;
-    return window.Capacitor && window.Capacitor.isPluginAvailable('Filesystem');
+    
+    // Verificar se está em Capacitor (mobile app)
+    const hasCapacitor = window.Capacitor !== undefined;
+    
+    if (!hasCapacitor) return false;
+    
+    // Se tem Capacitor, verificar se é realmente um app (não web)
+    const platform = window.Capacitor.getPlatform?.();
+    const isNativeApp = platform === 'android' || platform === 'ios';
+    
+    console.log('🔧 Platform:', platform, 'isNativeApp:', isNativeApp);
+    
+    return isNativeApp;
 };
 
 export const isDesktop = () => {
@@ -33,11 +45,20 @@ export const handleDownload = async ({
     onProgress
 }) => {
     try {
-        if (isMobileApp()) {
-            console.log('🔧 Detectado: Mobile App');
+        const isMobile = isMobileApp();
+        console.log('========== DOWNLOAD ==========');
+        console.log('isMobileApp():', isMobile);
+        console.log('window.Capacitor:', window.Capacitor);
+        if (window.Capacitor) {
+            console.log('Platform:', window.Capacitor.getPlatform?.());
+        }
+        console.log('=============================');
+        
+        if (isMobile) {
+            console.log('🎵 Detectado: Mobile App - Baixando MP3s individuais');
             return await onMobile?.({ album, albumSongs, onProgress });
         } else {
-            console.log('🔧 Detectado: Desktop/Web');
+            console.log('💻 Detectado: Desktop/Web - Baixando ZIP');
             return await onDesktop?.({ album, albumSongs });
         }
     } catch (error) {
