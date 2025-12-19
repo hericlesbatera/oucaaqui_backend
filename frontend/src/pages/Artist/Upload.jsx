@@ -139,11 +139,8 @@ const Upload = () => {
   };
 
   return (
-    <div className="bg-gray-50 flex min-h-screen hide-scrollbar">
-      <div className="w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-        <ArtistSidebar />
-      </div>
-      <div className="flex-1 bg-gradient-to-b from-red-950/20 to-black p-8 overflow-y-auto">
+    <div className="bg-gray-50 w-full hide-scrollbar">
+      <div className="bg-gradient-to-b from-red-950/20 to-black p-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold text-white mb-2">Novo Upload</h1>
           <p className="text-gray-400 mb-8">Compartilhe sua música com o mundo</p>

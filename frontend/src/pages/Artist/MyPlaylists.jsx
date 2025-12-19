@@ -484,13 +484,7 @@ const MyPlaylists = () => {
   }
 
   return (
-    <div className="bg-gray-50 flex min-h-screen">
-      {/* Sidebar - Hidden on mobile, visible on medium screens and up */}
-      <div className="hidden md:block w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-        <ArtistSidebar />
-      </div>
-      
-      <div className="flex-1">
+    <div className="bg-gray-50 w-full">
         <div className="max-w-5xl mx-auto p-6">
           {/* Header */}
           <div className="mb-6">

@@ -616,14 +616,7 @@ const UploadNew = () => {
     const finalUrl = formData.customUrl || generateDefaultUrl(formData.title);
 
     return (
-        <div className="bg-gray-50 flex min-h-screen">
-            {/* Sidebar - Fixed Position */}
-            <div className="hidden md:block w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-                <ArtistSidebar />
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1">
+        <div className="bg-gray-50 w-full">
                 <div className="max-w-6xl mx-auto p-4 md:p-8">
                     <div className="mb-6 md:mb-8">
                         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2 flex items-center gap-2 md:gap-3">

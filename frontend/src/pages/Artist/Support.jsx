@@ -201,11 +201,7 @@ const Support = () => {
     }
 
     return (
-        <div className="flex h-screen bg-gray-50">
-            <ArtistSidebar />
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="w-full bg-gray-50">
                 {/* Header */}
                 <div className="bg-white border-b border-gray-200 px-8 py-6">
                     <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -528,7 +524,6 @@ const Support = () => {
                                 </div>
                             </div>
                         )}
-                    </div>
                     </div>
                     </div>
                     </div>

@@ -165,12 +165,7 @@ const EmailSenha = () => {
   }
 
   return (
-    <div className="bg-gray-50 flex min-h-screen">
-      {/* Sidebar - Hidden on mobile, visible on medium screens and up */}
-      <div className="hidden md:block w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-        <ArtistSidebar />
-      </div>
-      <div className="flex-1">
+    <div className="bg-gray-50 w-full">
         <div className="max-w-2xl mx-auto p-4 md:p-8">
           <h1 className="text-xl md:text-2xl font-bold mb-8 flex items-center gap-2 text-black">
             <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock text-red-600">
@@ -274,7 +269,6 @@ const EmailSenha = () => {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 };
