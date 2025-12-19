@@ -36,20 +36,6 @@ const DashboardNew = () => {
     loadData();
   }, [user?.id, activeTab, period, selectedAlbum, selectedPlaylist]);
 
-  // Auto-select first item when switching tabs
-  // NOTE: This is now handled inside loadData() to ensure proper sequencing
-  useEffect(() => {
-    console.log('\n>>> Auto-select useEffect (DEPRECATED - now in loadData) <<<');
-    console.log('  activeTab:', activeTab);
-    console.log('  albums.length:', albums.length);
-    console.log('  playlists.length:', playlists.length);
-    console.log('  selectedAlbum:', selectedAlbum);
-    console.log('  selectedPlaylist:', selectedPlaylist);
-    console.log('>>> End Auto-select <<<\n');
-    
-    // NO AUTO-SELECT HERE - it's now done in loadData()
-  }, [activeTab, albums, playlists, selectedAlbum, selectedPlaylist]);
-
   const loadData = async () => {
     if (!user?.id) return;
     setLoading(true);
