@@ -4,10 +4,10 @@
   "description": "Ouça Aqui - O Melhor da Música Você Encontra Aqui",
   "main": "index.js",
   "scripts": {
-    "build": "cd frontend && npm run build && cp -r build ../backend/public"
+    "build": "cd frontend && npm install && npm run build && mkdir -p ../backend/public && cp -r build/* ../backend/public/"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
