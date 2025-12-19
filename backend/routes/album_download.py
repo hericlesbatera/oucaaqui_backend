@@ -75,11 +75,7 @@ async def download_album(album_id: str):
         
         print(f"[ALBUM_DOWNLOAD] ZIP criado com sucesso: {len(content) / 1024 / 1024:.1f}MB")
         
-        # Registrar download (incrementar contador)
-        try:
-            supabase.table('albums').update({'download_count': supabase.sql`COALESCE(download_count, 0) + 1`}).eq('id', album_id).execute()
-        except Exception as e:
-            print(f"[ALBUM_DOWNLOAD] Erro ao registrar download: {str(e)}")
+        # Registrar download será feito pelo frontend com recordAlbumDownload()
         
         # Retornar arquivo ZIP
         return StreamingResponse(
