@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20"]
+nixPkgs = ["python311Full", "nodejs_20"]
 
 [phases.install]
-cmds = ["npm ci", "cd backend && python3 -m pip install -r requirements.txt"]
+cmds = ["npm ci", "cd backend && pip install -r requirements.txt"]
 
 [phases.build]
 cmds = ["npm run build"]
