@@ -5,18 +5,37 @@
 export const isMobileApp = () => {
     if (typeof window === 'undefined') return false;
     
-    // Verificar se está em Capacitor (mobile app)
-    const hasCapacitor = window.Capacitor !== undefined;
-    
-    if (!hasCapacitor) return false;
-    
-    // Se tem Capacitor, verificar se é realmente um app (não web)
-    const platform = window.Capacitor.getPlatform?.();
-    const isNativeApp = platform === 'android' || platform === 'ios';
-    
-    console.log('🔧 Platform:', platform, 'isNativeApp:', isNativeApp);
-    
-    return isNativeApp;
+    try {
+        // Método 1: Verificar capacitor objeto global
+        if (window.Capacitor && window.Capacitor.isNativePlatform) {
+            console.log('✅ Detectado como Native App (isNativePlatform)');
+            return true;
+        }
+        
+        // Método 2: Verificar getPlatform
+        if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+            const platform = window.Capacitor.getPlatform();
+            const isNative = platform === 'android' || platform === 'ios';
+            console.log('Platform detectado:', platform, 'isNative:', isNative);
+            if (isNative) return true;
+        }
+        
+        // Método 3: Verificar user agent
+        const ua = navigator.userAgent.toLowerCase();
+        const isAndroid = ua.includes('android');
+        const isIOS = /iphone|ipad|ipod/.test(ua) && !ua.includes('mobile safari');
+        
+        if (isAndroid || isIOS) {
+            console.log('✅ Detectado como Mobile via User Agent (Android:', isAndroid, 'iOS:', isIOS, ')');
+            return true;
+        }
+        
+        console.log('❌ Detectado como Desktop/Web');
+        return false;
+    } catch (error) {
+        console.error('Erro ao detectar plataforma:', error);
+        return false;
+    }
 };
 
 export const isDesktop = () => {
@@ -24,8 +43,14 @@ export const isDesktop = () => {
 };
 
 export const getPlatform = () => {
-    if (!isMobileApp()) return 'desktop';
-    return window.Capacitor.getPlatform?.() || 'web';
+    try {
+        if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+            return window.Capacitor.getPlatform();
+        }
+    } catch (e) {
+        console.error('Erro ao obter plataforma:', e);
+    }
+    return 'web';
 };
 
 /**

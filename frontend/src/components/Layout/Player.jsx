@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Volume2, VolumeX, Download, Heart, List, ChevronUp, ChevronDown, Trash2, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Volume2, VolumeX, Download, Heart, List, ChevronUp, ChevronDown, Trash2, X, WifiOff } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useAuth } from '../../context/AuthContext';
 import { recordSongDownload } from '../../lib/statsHelper';
@@ -221,7 +221,15 @@ const Player = () => {
                         onError={() => setImageError(true)}
                     />
                     <div className="flex-1 min-w-0">
-                        <p className="text-white font-bold text-xs truncate">{cleanTitle(currentSong.title)}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-white font-bold text-xs truncate">{cleanTitle(currentSong.title)}</p>
+                            {currentSong?.isOffline && (
+                                <div className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 text-amber-200 rounded text-xs font-medium whitespace-nowrap">
+                                    <WifiOff className="w-2.5 h-2.5" />
+                                    <span>Offline</span>
+                                </div>
+                            )}
+                        </div>
                         <p className="text-white/70 text-xs truncate">{currentSong.artistName}</p>
                     </div>
                     <div className="flex items-center gap-1">

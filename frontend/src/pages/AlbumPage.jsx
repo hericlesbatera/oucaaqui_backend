@@ -29,7 +29,7 @@ const AlbumPage = () => {
      const navigate = useNavigate();
      const { playSong, currentSong, isPlaying, togglePlay, setIsFullPlayerOpen } = usePlayer();
      const { user, isPremium } = useAuth();
-     const { downloadAlbum, downloadProgress } = useCapacitorDownloads();
+     const { downloadAlbum, downloadProgress, isAlbumDownloaded } = useCapacitorDownloads();
      const [isFavorite, setIsFavorite] = useState(false);
      const [album, setAlbum] = useState(null);
      const [albumSongs, setAlbumSongs] = useState([]);
@@ -849,13 +849,32 @@ const AlbumPage = () => {
                         </Button>
                         <Button
                             onClick={handleDownloadAlbum}
-                            disabled={downloadInProgress}
-                            className="bg-red-600 hover:bg-red-700 text-white px-8 h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={downloadInProgress || isAlbumDownloaded(album?.id)}
+                            className={`relative text-white px-8 h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
+                                isAlbumDownloaded(album?.id) 
+                                    ? 'bg-green-600 hover:bg-green-600' 
+                                    : 'bg-red-600 hover:bg-red-700'
+                            }`}
                         >
-                            {downloadInProgress ? (
+                            {downloadInProgress && downloadProgress[album?.id] ? (
+                                <>
+                                    <div className="absolute inset-0 bg-red-700 transition-all duration-300" 
+                                        style={{ width: `${(downloadProgress[album.id].current / downloadProgress[album.id].total) * 100}%` }}>
+                                    </div>
+                                    <span className="relative inline-block animate-spin mr-2">⏳</span>
+                                    <span className="relative">
+                                        BAIXANDO {downloadProgress[album.id].current}/{downloadProgress[album.id].total}...
+                                    </span>
+                                </>
+                            ) : downloadInProgress ? (
                                 <>
                                     <span className="inline-block animate-spin mr-2">⏳</span>
                                     BAIXANDO...
+                                </>
+                            ) : isAlbumDownloaded(album?.id) ? (
+                                <>
+                                    <Download className="w-5 h-5 mr-2" />
+                                    JÁ BAIXADO ✓
                                 </>
                             ) : (
                                 <>
@@ -982,13 +1001,27 @@ const AlbumPage = () => {
                         {/* Download Button */}
                         <Button
                             onClick={handleDownloadAlbum}
-                            disabled={downloadInProgress}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={downloadInProgress || isAlbumDownloaded(album?.id)}
+                            className={`w-full text-white h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isAlbumDownloaded(album?.id) 
+                                    ? 'bg-green-600 hover:bg-green-600' 
+                                    : 'bg-red-600 hover:bg-red-700'
+                            }`}
                         >
-                            {downloadInProgress ? (
+                            {downloadInProgress && downloadProgress[album?.id] ? (
+                                <>
+                                    <span className="inline-block animate-spin mr-2">⏳</span>
+                                    BAIXANDO {downloadProgress[album.id].current}/{downloadProgress[album.id].total}...
+                                </>
+                            ) : downloadInProgress ? (
                                 <>
                                     <span className="inline-block animate-spin mr-2">⏳</span>
                                     BAIXANDO...
+                                </>
+                            ) : isAlbumDownloaded(album?.id) ? (
+                                <>
+                                    <Download className="w-5 h-5 mr-2" />
+                                    JÁ BAIXADO ✓
                                 </>
                             ) : (
                                 <>

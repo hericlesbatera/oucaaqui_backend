@@ -6,7 +6,7 @@ const DOWNLOADS_DIR = 'downloads';
 const METADATA_KEY = 'downloads_metadata';
 
 // Verificar se está em ambiente Capacitor mobile
-const isCapacitorAvailable = () => {
+export const isCapacitorAvailable = () => {
     if (typeof window === 'undefined') return false;
     
     const hasCapacitor = window.Capacitor !== undefined;
