@@ -2,10 +2,10 @@
 nixPkgs = ["python311Full", "nodejs_20", "python311Packages.pip"]
 
 [phases.install]
-cmds = ["npm ci", "cd backend && python -m ensurepip --upgrade && python -m pip install -r requirements.txt"]
+cmds = ["npm ci", "cd backend && python -m venv /app/venv && /app/venv/bin/pip install -r requirements.txt"]
 
 [phases.build]
 cmds = ["npm run build"]
 
 [start]
-cmd = "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "cd backend && /app/venv/bin/uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"
