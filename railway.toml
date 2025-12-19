@@ -5,4 +5,4 @@ builder = "nixpacks"
 providers = ["python", "node"]
 
 [deploy]
-startCommand = "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
+startCommand = "cd backend && /app/venv/bin/uvicorn server:app --host 0.0.0.0 --port $PORT"
