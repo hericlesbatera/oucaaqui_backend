@@ -471,21 +471,36 @@ const AlbumPage = () => {
                 downloadUrl = `/api/albums/${album.id}/download`;
             }
 
-            const response = await fetch(downloadUrl);
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
-            }
+            // Fetch com timeout maior para gerar ZIP
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutos
             
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
-            link.download = `${album.title}.${extension}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            try {
+                const response = await fetch(downloadUrl, {
+                    signal: controller.signal,
+                    credentials: 'include'
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
+                link.download = `${album.title}.${extension}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
+            }
 
             toast({
                 title: 'Sucesso',
