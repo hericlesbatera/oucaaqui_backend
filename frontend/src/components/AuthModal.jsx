@@ -423,7 +423,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     return (
         <>
             <div 
-                className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+                className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto"
                 onClick={(e) => {
                     if (e.target === e.currentTarget) {
                         onClose();
@@ -431,7 +431,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 }}
             >
                 {/* Versão Mobile */}
-                <div className="md:hidden w-full max-w-full">
+                <div className="md:hidden w-full max-w-full my-auto">
                     {loginStep === 'reset' ? (
                         // RESET DE SENHA - Mobile
                         <div className="bg-white rounded-lg shadow-2xl overflow-hidden relative">
@@ -1022,7 +1022,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         </div>
                     ) : signupStep === 2 ? (
                         // SIGNUP STEP 2 - Artist Info
-                        <div className="bg-white p-8 md:p-12 min-h-auto max-w-2xl mx-auto">
+                        <div className="bg-white p-6 sm:p-8 md:p-12 min-h-auto max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
                             {/* Stepper Visual */}
                             <div className="flex items-center justify-between mb-12">
                                 {/* Step 1 */}
@@ -1219,7 +1219,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         </div>
                     ) : signupStep === 3 ? (
                         // SIGNUP STEP 3 - Success
-                        <div className="bg-white p-8 md:p-12 min-h-auto max-w-2xl mx-auto">
+                        <div className="bg-white p-6 sm:p-8 md:p-12 min-h-auto max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
                             {/* Stepper Visual */}
                             <div className="flex items-center justify-between mb-12">
                                 {/* Step 1 */}
