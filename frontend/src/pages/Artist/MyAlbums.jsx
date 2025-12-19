@@ -404,26 +404,38 @@ const MyAlbums = () => {
         let coverUrl = editForm.coverImage;
 
     if (newCoverFile) {
+                console.log('Attempting to upload file:', newCoverFile.name, 'Size:', newCoverFile.size);
+                
                 const fileExt = newCoverFile.name.split('.').pop();
      const fileName = `albums/${editingAlbum.id}/cover_${Date.now()}.${fileExt}`;
+     
+     console.log('Upload path:', fileName);
 
-     const {error: uploadError } = await supabase.storage
-     .from('musica')
-     .upload(fileName, newCoverFile, {upsert: true });
+     try {
+         const {data: uploadData, error: uploadError } = await supabase.storage
+         .from('musica')
+         .upload(fileName, newCoverFile, {upsert: true });
 
-     if (uploadError) {
-         console.error('Upload error:', uploadError);
-         throw uploadError;
-     }
+         if (uploadError) {
+             console.error('Supabase upload error:', uploadError);
+             throw new Error(`Upload failed: ${uploadError.message}`);
+         }
 
-     const { data } = supabase.storage
-     .from('musica')
-     .getPublicUrl(fileName);
+         console.log('Upload successful:', uploadData);
 
-     if (data && data.publicUrl) {
-         coverUrl = data.publicUrl;
-     } else {
-         throw new Error('Failed to get public URL');
+         const { data } = supabase.storage
+         .from('musica')
+         .getPublicUrl(fileName);
+
+         if (data && data.publicUrl) {
+             console.log('Public URL:', data.publicUrl);
+             coverUrl = data.publicUrl;
+         } else {
+             throw new Error('Failed to get public URL');
+         }
+     } catch (uploadErr) {
+         console.error('File upload error:', uploadErr);
+         throw uploadErr;
      }
              }
 
