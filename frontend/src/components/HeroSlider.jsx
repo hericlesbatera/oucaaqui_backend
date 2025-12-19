@@ -174,9 +174,9 @@ const HeroSlider = () => {
                     </div>
                 </div>
 
-                {/* Thumbnails - 2 colunas abaixo - scrollable if more than 4 */}
+                {/* Thumbnails - 2 colunas abaixo - max 5 items */}
                 <div className="grid grid-cols-2 gap-3 max-h-[440px] overflow-y-auto">
-                    {slides.map((slide, index) => (
+                    {slides.slice(0, 5).map((slide, index) => (
                         <button
                             key={slide.id}
                             onClick={() => goToSlide(index)}
