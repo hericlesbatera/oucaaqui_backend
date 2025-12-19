@@ -22,33 +22,39 @@ export const useMusicFavorite = (musicId) => {
     try {
       setLoading(true);
       
-      // Try new music_favorites table with snake_case
+      // Try new music_favorites table first
       const { data, error } = await supabase
         .from('music_favorites')
-        .select('id', { count: 'exact' })
+        .select('id')
         .eq('user_id', user.id)
         .eq('music_id', musicId)
         .limit(1);
 
       if (!error && data && data.length > 0) {
         setIsFavorite(true);
-      } else {
-        // Fallback: check old favorites table with snake_case
-        try {
-          const { data: oldData } = await supabase
-            .from('favorites')
-            .select('id', { count: 'exact' })
-            .eq('user_id', user.id)
-            .eq('song_id', musicId)
-            .limit(1);
+      } else if (error && error.code !== 'PGRST116') {
+        // Only log non-permission errors (PGRST116 is "permission denied")
+        console.error('Error checking music_favorites:', error.code);
+      }
+      
+      // If no data, try old favorites table
+      if (!data || data.length === 0) {
+        const { data: oldData, error: oldError } = await supabase
+          .from('favorites')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('song_id', musicId)
+          .limit(1);
 
-          setIsFavorite(oldData && oldData.length > 0);
-        } catch {
-          setIsFavorite(false);
+        if (!oldError && oldData && oldData.length > 0) {
+          setIsFavorite(true);
+        } else if (oldError && oldError.code !== 'PGRST116') {
+          console.error('Error checking favorites:', oldError.code);
         }
       }
     } catch (error) {
-      console.error('Error checking favorite:', error);
+      // Silent fail for favorites check - not critical
+      console.debug('Favorite check skipped:', error?.message);
       setIsFavorite(false);
     } finally {
       setLoading(false);

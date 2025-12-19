@@ -38,7 +38,8 @@ const AlbumPage = () => {
      const [recommendedAlbums, setRecommendedAlbums] = useState([]);
      const [albumVideo, setAlbumVideo] = useState(null);
      const [showMobilePlayer, setShowMobilePlayer] = useState(false);
-     const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
+       const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
+       const [downloadInProgress, setDownloadInProgress] = useState(false);
 
     useEffect(() => {
         let isMounted = true; // Flag para evitar state updates após unmount
@@ -455,23 +456,26 @@ const AlbumPage = () => {
             return;
         }
 
-        toast({
-            title: 'Download Iniciado',
-            description: `Preparando download de ${album.title}...`
-        });
+        setDownloadInProgress(true);
         try {
-            // Registrar download
+            // Registrar download imediatamente
             const songIds = albumSongs.map(s => s.id);
             recordAlbumDownload(album.id, songIds);
             setAlbum(prev => ({ ...prev, download_count: (prev.download_count || 0) + 1 }));
 
-            // Usar archive_url se existir, senao usar endpoint dinamico
+            // Usar archive_url se existir (pré-gerado), senão usar endpoint dinâmico
             let downloadUrl = album.archiveUrl;
             if (!downloadUrl) {
                 downloadUrl = `/api/albums/${album.id}/download`;
             }
 
-            // Fetch com timeout maior para gerar ZIP
+            // Mostrar notificação IMEDIATAMENTE quando o download inicia
+            toast({
+                title: 'Download Iniciado',
+                description: `${album.title} está sendo baixado...`
+            });
+
+            // Fetch com streaming imediato (não espera completar antes de baixar)
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutos
             
@@ -486,17 +490,59 @@ const AlbumPage = () => {
                 if (!response.ok) {
                     throw new Error(`Erro HTTP: ${response.status}`);
                 }
-                
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
+
+                // Determinar extensão
                 const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
-                link.download = `${album.title}.${extension}`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
+                const filename = `${album.title}.${extension}`;
+                
+                // Método 1: Usar stream para download imediato (compatível com navegadores modernos)
+                if (response.body && typeof response.body.getReader === 'function') {
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let receivedLength = 0;
+
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            chunks.push(value);
+                            receivedLength += value.length;
+                        }
+                        
+                        const blob = new Blob(chunks);
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                    } catch (streamError) {
+                        console.error('Erro ao fazer stream:', streamError);
+                        // Fallback para blob tradicional
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                    }
+                } else {
+                    // Fallback para navegadores antigos
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                }
             } catch (fetchError) {
                 clearTimeout(timeoutId);
                 throw fetchError;
@@ -504,15 +550,17 @@ const AlbumPage = () => {
 
             toast({
                 title: 'Sucesso',
-                description: 'Download concluido'
+                description: 'Download concluído'
             });
         } catch (error) {
             console.error('Download error:', error);
             toast({
                 title: 'Erro no Download',
-                description: 'Nao foi possivel baixar o arquivo',
+                description: error?.message || 'Não foi possível baixar o arquivo',
                 variant: 'destructive'
             });
+        } finally {
+            setDownloadInProgress(false);
         }
     };
 
@@ -783,10 +831,20 @@ const AlbumPage = () => {
                         </Button>
                         <Button
                             onClick={handleDownloadAlbum}
-                            className="bg-red-600 hover:bg-red-700 text-white px-8 h-12 text-base font-bold shadow-lg"
+                            disabled={downloadInProgress}
+                            className="bg-red-600 hover:bg-red-700 text-white px-8 h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Download className="w-5 h-5 mr-2" />
-                            BAIXAR CD COMPLETO
+                            {downloadInProgress ? (
+                                <>
+                                    <span className="inline-block animate-spin mr-2">⏳</span>
+                                    BAIXANDO...
+                                </>
+                            ) : (
+                                <>
+                                    <Download className="w-5 h-5 mr-2" />
+                                    BAIXAR CD COMPLETO
+                                </>
+                            )}
                         </Button>
                         <Popover>
                             <PopoverTrigger asChild>
@@ -906,10 +964,20 @@ const AlbumPage = () => {
                         {/* Download Button */}
                         <Button
                             onClick={handleDownloadAlbum}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-bold shadow-lg"
+                            disabled={downloadInProgress}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-base font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Download className="w-5 h-5 mr-2" />
-                            BAIXAR CD COMPLETO
+                            {downloadInProgress ? (
+                                <>
+                                    <span className="inline-block animate-spin mr-2">⏳</span>
+                                    BAIXANDO...
+                                </>
+                            ) : (
+                                <>
+                                    <Download className="w-5 h-5 mr-2" />
+                                    BAIXAR CD COMPLETO
+                                </>
+                            )}
                         </Button>
                         
                         {/* Share & Stats */}
