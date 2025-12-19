@@ -30,10 +30,6 @@ app.include_router(artist_videos_router)
 app.include_router(cleanup_router)
 app.include_router(music_files_router)
 
-@app.get("/")
-def read_root():
-    return {"message": "Olá, MusicaSua!"}
-
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
