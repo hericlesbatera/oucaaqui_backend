@@ -20,6 +20,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 router = APIRouter(prefix="/api/albums", tags=["albums"])
 
+@router.get("")
+async def list_albums():
+    """List all albums"""
+    try:
+        albums = supabase.table("albums").select("*").execute()
+        return albums.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching albums: {str(e)}")
+
 @router.delete("/{album_id}")
 async def delete_album(
     album_id: str,
