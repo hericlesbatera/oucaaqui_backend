@@ -42,14 +42,10 @@ export const isCapacitorAvailable = () => {
 
 // Salvar metadados em cache local
 const saveMetadata = async (downloads) => {
-    try {
-        await Preferences.set({
-            key: METADATA_KEY,
-            value: JSON.stringify(downloads)
-        });
-    } catch (error) {
-        console.error('Erro ao salvar metadados:', error);
-    }
+    await Preferences.set({
+        key: METADATA_KEY,
+        value: JSON.stringify(downloads)
+    });
 };
 
 // Carregar metadados do cache
@@ -356,6 +352,20 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             const albumDir = sanitizePath(album.title);
             console.log('📁 Pasta do álbum:', albumDir);
             console.log('==========================================');
+            
+            // Validar URLs antes de começar
+            const songsWithValidURLs = songs.filter(song => {
+                const url = song?.audioUrl || song?.audio_url || song?.url;
+                return !!url;
+            });
+            
+            console.log(`📋 Músicas com URL válida: ${songsWithValidURLs.length}/${songs.length}`);
+            
+            if (songsWithValidURLs.length === 0) {
+                console.error('❌ Nenhuma música possui URL de áudio válida!');
+                throw new Error(`Nenhuma música possui URL de áudio válida. Verifique se as músicas foram carregadas corretamente.`);
+            }
+            
             const downloadedSongs = [];
             let successCount = 0;
             let failCount = 0;
@@ -363,7 +373,7 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             // iniciar progresso em 0
             setDownloadProgress(prev => ({
                 ...prev,
-                [album.id]: { current: 0, total: songs.length }
+                [album.id]: { current: 0, total: songsWithValidURLs.length }
             }));
 
             for (let i = 0; i < songs.length; i++) {
@@ -397,8 +407,8 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                 if (onSongDownloadStart) {
                     onSongDownloadStart({
                         song: song.title,
-                        index: i + 1,
-                        total: songs.length
+                        index: successCount + failCount + 1,
+                        total: songsWithValidURLs.length
                     });
                 }
 
@@ -417,24 +427,39 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                     // Atualizar progresso real
                     setDownloadProgress(prev => ({
                         ...prev,
-                        [album.id]: { current: successCount, total: songs.length }
+                        [album.id]: { current: successCount, total: songsWithValidURLs.length }
                     }));
                 } catch (error) {
                     console.error(`   ❌ FALHA: ${error.message}`);
                     failCount++;
+                    // Atualizar progresso mesmo em falha para mostrar que tentou
+                    setDownloadProgress(prev => ({
+                        ...prev,
+                        [album.id]: { current: successCount, total: songsWithValidURLs.length, failed: failCount }
+                    }));
                 }
             }
 
             console.log('\n==========================================');
             console.log(`📊 RESUMO DO DOWNLOAD`);
-            console.log(`   Sucesso: ${successCount}/${songs.length}`);
-            console.log(`   Falha: ${failCount}/${songs.length}`);
+            console.log(`   Sucesso: ${successCount}/${songsWithValidURLs.length}`);
+            console.log(`   Falha: ${failCount}/${songsWithValidURLs.length}`);
             console.log('==========================================\n');
 
             // Verificar se alguma música foi baixada com sucesso
             if (downloadedSongs.length === 0) {
                 console.error('❌ Nenhuma música foi baixada com sucesso!');
-                throw new Error('Falha ao baixar todas as músicas do álbum');
+                console.error('   Possíveis causas:');
+                console.error('   - URLs de áudio inválidas ou vazias');
+                console.error('   - Problemas de conexão');
+                console.error('   - Falta de espaço no dispositivo');
+                console.error('   - Permissões de armazenamento negadas');
+                throw new Error(`Falha ao baixar músicas do álbum. Nenhuma das ${songs.length} músicas foi baixada. Verifique sua conexão e espaço disponível.`);
+            }
+            
+            // Se algumas músicas falharam mas outras funcionaram, continuar com as que funcionaram
+            if (failCount > 0 && successCount > 0) {
+                console.warn(`⚠️ Download parcial: ${successCount} de ${songs.length} músicas baixadas`);
             }
 
             // Salvar metadados do álbum
@@ -456,7 +481,7 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                 musicas: albumDownload.songs.length
             });
 
-            const updatedDownloads = [...downloads, albumDownload];
+            let updatedDownloads = [...downloads, albumDownload];
 
             // Salvar metadados
             try {
@@ -464,7 +489,28 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                 console.log('✅ Metadados salvos com sucesso');
             } catch (saveError) {
                 console.error('❌ Erro ao salvar metadados:', saveError);
-                throw saveError;
+                // Mesmo que os metadados falhem, as músicas foram baixadas
+                // Tentar salvar novamente com menos dados
+                console.warn('⚠️ Tentando salvar metadados simplificados...');
+                try {
+                    const simplifiedDownload = {
+                        albumId: album.id,
+                        title: album.title,
+                        artist: album.artist_name || 'Desconhecido',
+                        albumDir: sanitizePath(album.title),
+                        downloadedAt: new Date().toISOString(),
+                        songCount: downloadedSongs.length,
+                        totalSongs: songs.length,
+                        songs: downloadedSongs.map(s => ({ id: s.id, title: s.title, fileName: s.fileName }))
+                    };
+                    updatedDownloads = [...downloads, simplifiedDownload];
+                    await saveMetadata(updatedDownloads);
+                    console.log('✅ Metadados simplificados salvos');
+                } catch (retryError) {
+                    console.error('❌ Falha ao salvar metadados mesmo simplificados:', retryError);
+                    // Continua sem salvar - pelo menos as músicas estão lá
+                    console.warn('⚠️ Músicas baixadas mas metadados não salvos');
+                }
             }
 
             // Atualizar estado

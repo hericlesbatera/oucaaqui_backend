@@ -33,7 +33,7 @@ export const useOfflinePlayer = () => {
             // Ler o arquivo (retorna base64 por padrão)
             const file = await Filesystem.readFile({
                 path: filePath,
-                directory: Directory.Documents
+                directory: Directory.Data
             });
 
             // Criar blob URL a partir do base64
