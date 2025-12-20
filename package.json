@@ -15,7 +15,6 @@
     "@capacitor/core": "^8.0.0",
     "@capacitor/filesystem": "^8.0.0",
     "@capacitor/preferences": "^8.0.0",
-    "@capacitor-community/http": "^1.5.6",
     "@supabase/supabase-js": "^2.86.2"
   }
 }
