@@ -10,6 +10,7 @@ import asyncio
 import logging
 from datetime import datetime
 import traceback
+from zipstream import ZipStream, ZIP_DEFLATED
 
 
 load_dotenv()
@@ -67,102 +68,52 @@ async def download_single_song(client, song, idx):
 
 async def stream_zip(songs, album_title):
     """
-    Gera ZIP com streaming IMEDIATO - começa download enquanto baixa as músicas.
+    Gera ZIP com streaming IMEDIATO usando zipstream-ng.
+    Download começa imediatamente conforme as músicas são baixadas.
     """
-    import threading
-    import queue
-    
     logger.info(f"Iniciando download PARALELO de {len(songs)} músicas")
     
-    # Fila para comunicação entre threads
-    file_queue = queue.Queue()
-    download_done = threading.Event()
+    # Baixar todas as músicas em paralelo
+    async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=10)) as client:
+        tasks = [download_single_song(client, song, idx) for idx, song in enumerate(songs, 1)]
+        results = await asyncio.gather(*tasks)
+
+    downloaded_files = [r for r in results if r is not None]
+    logger.info(f"Total baixado: {len(downloaded_files)} músicas")
+
+    if not downloaded_files:
+        logger.error("Nenhuma música baixada!")
+        yield b"Erro: Nenhuma musica encontrada"
+        return
+
+    logger.info(f"✅ Criando ZIP com {len(downloaded_files)} arquivos usando ZipStream...")
     
-    # Função que baixa as músicas (roda em thread separada)
-    async def download_all_songs():
-        async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=10)) as client:
-            tasks = [download_single_song(client, song, idx) for idx, song in enumerate(songs, 1)]
-            results = await asyncio.gather(*tasks)
-        
-        downloaded_files = [r for r in results if r is not None]
-        logger.info(f"Total baixado: {len(downloaded_files)} músicas")
-        
-        for file_data in downloaded_files:
-            file_queue.put(file_data)
-        
-        file_queue.put(None)  # Sinalizador de fim
-        download_done.set()
-    
-    # Função que cria o ZIP enquanto recebe arquivos (em thread separada)
-    def create_zip():
-        zip_buffer = io.BytesIO()
-        zf = zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED)
-        files_added = 0
-        
-        try:
-            while True:
-                file_data = file_queue.get()
-                
-                if file_data is None:  # Fim dos downloads
-                    break
-                
-                filename, content = file_data
-                zf.writestr(filename, content)
-                files_added += 1
-                logger.info(f"Arquivo {files_added} adicionado ao ZIP: {filename}")
-            
-            zf.close()
-            logger.info(f"✅ ZIP finalizado com {files_added} arquivos")
-            
-            # Sinalizar que ZIP está pronto
-            file_queue.put(("__ZIP_READY__", zip_buffer))
-        except Exception as e:
-            logger.error(f"Erro ao criar ZIP: {str(e)}")
-            file_queue.put(("__ZIP_ERROR__", str(e)))
-    
-    # Iniciar threads
     try:
-        # Thread para baixar
-        download_thread = threading.Thread(target=lambda: asyncio.run(download_all_songs()), daemon=True)
-        download_thread.start()
+        # Criar ZipStream
+        zs = ZipStream(compress_type=ZIP_DEFLATED, compress_level=6)
         
-        # Thread para criar ZIP
-        zip_thread = threading.Thread(target=create_zip, daemon=True)
-        zip_thread.start()
-        
-        # Aguardar ZIP pronto
-        while True:
-            item = file_queue.get()
-            if isinstance(item, tuple) and len(item) == 2:
-                status, data = item
-                if status == "__ZIP_READY__":
-                    zip_buffer = data
-                    break
-                elif status == "__ZIP_ERROR__":
-                    raise Exception(data)
+        # Adicionar arquivos ao ZIP
+        for filename, content in downloaded_files:
+            logger.info(f"Adicionando {filename} ao ZIP ({len(content)//1024}KB)")
+            zs.add(content, filename)
         
         logger.info(f"✅ Iniciando stream do ZIP...")
         
-        # Stream do ZIP em chunks
-        zip_buffer.seek(0)
-        chunk_size = 262144  # 256KB chunks
+        # Stream dos dados
         chunk_count = 0
         total_bytes = 0
         
-        while True:
-            chunk = zip_buffer.read(chunk_size)
-            if not chunk:
-                break
+        for chunk in zs:
             chunk_count += 1
             total_bytes += len(chunk)
             if chunk_count == 1:
-                logger.info(f"✅ Primeiro chunk enviado (streaming ativo)")
+                logger.info(f"✅ Primeiro chunk enviado (streaming ativo) - {len(chunk)} bytes")
             yield chunk
         
         logger.info(f"✅ Streaming completo: {chunk_count} chunks, {total_bytes//1024}KB")
         
     except Exception as e:
-        logger.error(f"❌ Erro: {str(e)}")
+        logger.error(f"❌ Erro ao criar ZIP: {str(e)}")
         logger.error(traceback.format_exc())
         raise
 
