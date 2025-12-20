@@ -370,6 +370,7 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             const downloadedSongs = [];
             let successCount = 0;
             let failCount = 0;
+            let lastError = '';
 
             // iniciar progresso em 0
             setDownloadProgress(prev => ({
@@ -432,11 +433,12 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                     }));
                 } catch (error) {
                     console.error(`   ❌ FALHA: ${error.message}`);
+                    lastError = `${song.title}: ${error.message}`;
                     failCount++;
                     // Atualizar progresso mesmo em falha para mostrar que tentou
                     setDownloadProgress(prev => ({
                         ...prev,
-                        [album.id]: { current: successCount, total: songsWithValidURLs.length, failed: failCount }
+                        [album.id]: { current: successCount, total: songsWithValidURLs.length, failed: failCount, lastError }
                     }));
                 }
             }
@@ -445,17 +447,16 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             console.log(`📊 RESUMO DO DOWNLOAD`);
             console.log(`   Sucesso: ${successCount}/${songsWithValidURLs.length}`);
             console.log(`   Falha: ${failCount}/${songsWithValidURLs.length}`);
+            console.log(`   Último erro: ${lastError}`);
             console.log('==========================================\n');
 
             // Verificar se alguma música foi baixada com sucesso
             if (downloadedSongs.length === 0) {
                 console.error('❌ Nenhuma música foi baixada com sucesso!');
-                console.error('   Possíveis causas:');
-                console.error('   - URLs de áudio inválidas ou vazias');
-                console.error('   - Problemas de conexão');
-                console.error('   - Falta de espaço no dispositivo');
-                console.error('   - Permissões de armazenamento negadas');
-                throw new Error(`Falha ao baixar músicas do álbum. Nenhuma das ${songs.length} músicas foi baixada. Verifique sua conexão e espaço disponível.`);
+                const errorMsg = lastError 
+                    ? `Erro: ${lastError}` 
+                    : 'Verifique sua conexão e espaço disponível.';
+                throw new Error(`Falha ao baixar. ${errorMsg}`);
             }
             
             // Se algumas músicas falharam mas outras funcionaram, continuar com as que funcionaram
