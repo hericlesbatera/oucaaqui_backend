@@ -68,36 +68,36 @@ async def stream_zip(songs, album_title):
         return
     
     print(f"[ALBUM_DOWNLOAD] ✅ {len(downloaded_files)} músicas baixadas, criando ZIP...")
-    
-        # Sempre usar ZipStream para streaming real
-        print("[ALBUM_DOWNLOAD] Using ZipStream for true streaming (forçado)")
-        file_dict = {}
-        downloaded_count = 0
-        for idx, song in enumerate(songs, 1):
-            try:
-                if song.get('audio_url'):
-                    title = song.get('title', 'track')[:40]
-                    print(f"[ALBUM_DOWNLOAD] Baixando musica {idx}/{len(songs)}: {title}")
-                    try:
-                        response = await client.get(song['audio_url'], follow_redirects=True, timeout=30.0)
-                        if response.status_code == 200:
-                            track_num = song.get('track_number', idx)
-                            filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
-                            file_dict[filename] = response.content
-                            downloaded_count += 1
-                            print(f"[ALBUM_DOWNLOAD]   OK ({downloaded_count}/{len(songs)}): {filename}")
-                        else:
-                            print(f"[ALBUM_DOWNLOAD]   FALHOU: status {response.status_code}")
-                    except asyncio.TimeoutError:
-                        print(f"[ALBUM_DOWNLOAD]   TIMEOUT: {title}")
-                    except Exception as e:
-                        print(f"[ALBUM_DOWNLOAD]   ERRO: {str(e)[:50]}")
-            except Exception as e:
-                print(f"[ALBUM_DOWNLOAD]   ERRO GERAL: {str(e)[:50]}")
-            await asyncio.sleep(0)
-        zs = ZipStream(file_dict, compression=zipfile.ZIP_DEFLATED, chunksize=262144)
-        for chunk in zs:
-            yield chunk
+
+    # Sempre usar ZipStream para streaming real
+    print("[ALBUM_DOWNLOAD] Using ZipStream for true streaming (forçado)")
+    file_dict = {}
+    downloaded_count = 0
+    for idx, song in enumerate(songs, 1):
+        try:
+            if song.get('audio_url'):
+                title = song.get('title', 'track')[:40]
+                print(f"[ALBUM_DOWNLOAD] Baixando musica {idx}/{len(songs)}: {title}")
+                try:
+                    response = await client.get(song['audio_url'], follow_redirects=True, timeout=30.0)
+                    if response.status_code == 200:
+                        track_num = song.get('track_number', idx)
+                        filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
+                        file_dict[filename] = response.content
+                        downloaded_count += 1
+                        print(f"[ALBUM_DOWNLOAD]   OK ({downloaded_count}/{len(songs)}): {filename}")
+                    else:
+                        print(f"[ALBUM_DOWNLOAD]   FALHOU: status {response.status_code}")
+                except asyncio.TimeoutError:
+                    print(f"[ALBUM_DOWNLOAD]   TIMEOUT: {title}")
+                except Exception as e:
+                    print(f"[ALBUM_DOWNLOAD]   ERRO: {str(e)[:50]}")
+        except Exception as e:
+            print(f"[ALBUM_DOWNLOAD]   ERRO GERAL: {str(e)[:50]}")
+        await asyncio.sleep(0)
+    zs = ZipStream(file_dict, compression=zipfile.ZIP_DEFLATED, chunksize=262144)
+    for chunk in zs:
+        yield chunk
     
     print(f"[ALBUM_DOWNLOAD] 📦 ZIP criado: {zip_buffer.tell()//1024}KB")
     
