@@ -638,18 +638,24 @@ const AlbumPage = () => {
             console.error('Download error:', error);
             setDownloadInProgress(false);
             
-            // Se o status ainda é 'downloading', significa que o erro ocorreu no Capacitor
-            if (downloadStatus === 'downloading') {
-                const errorMsg = error?.message || 'Falha ao baixar. Verifique sua conexão e espaço disponível no celular.';
+            // Se é mobile (Capacitor), mostrar modal com erro
+            // Se é desktop, mostrar toast
+            const isMobile = window.Capacitor?.isNativePlatform?.() || 
+                           (window.Capacitor && window.Capacitor.getPlatform?.() !== 'web');
+            
+            const errorMsg = error?.message || 'Falha ao baixar. Verifique sua conexão e espaço disponível no celular.';
+            
+            if (isMobile) {
+                // Mobile: mostrar modal com erro
                 setDownloadErrorMessage(errorMsg);
                 setDownloadStatus('error');
-                // Manter modal aberto para mostrar o erro
+                // Modal já está aberto, só muda o status
             } else {
-                // Para desktop, fechar modal
+                // Desktop: fechar modal e mostrar toast
                 setDownloadModalOpen(false);
                 toast({
                     title: '❌ Erro no Download',
-                    description: error?.message || 'Não foi possível baixar o arquivo',
+                    description: errorMsg,
                     variant: 'destructive'
                 });
             }
