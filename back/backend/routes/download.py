@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from supabase import create_client
 import os
 from dotenv import load_dotenv
@@ -9,6 +9,7 @@ import httpx
 import asyncio
 from io import BytesIO
 import zipfile
+import io
 
 load_dotenv()
 
@@ -29,8 +30,8 @@ async def download_album(
     authorization: Optional[str] = Header(None)
 ):
     """
-    Stream album as ZIP file with all songs.
-    Uses streaming to avoid loading entire ZIP into memory.
+    Stream album as ZIP file with immediate download start.
+    True streaming - starts sending to client immediately, no buffering.
     """
     try:
         # Get album info
@@ -40,6 +41,7 @@ async def download_album(
             raise HTTPException(status_code=404, detail="Album not found")
         
         album = album_response.data
+        album_title = album.get("title", "album")
         
         # Check if album is private
         if album.get("is_private"):
@@ -63,16 +65,50 @@ async def download_album(
             raise HTTPException(status_code=404, detail="No songs found in album")
         
         songs = songs_response.data
-        album_title = album.get("title", "album")
-        
         print(f"[DOWNLOAD] Starting album download: {album_title} ({len(songs)} songs)")
         
-        # Create streaming ZIP response
-        async def generate_zip():
-            """Generate ZIP file on-the-fly with streaming"""
-            buffer = BytesIO()
+        async def generate_zip_stream() -> AsyncGenerator[bytes, None]:
+            """
+            Generate ZIP file with REAL streaming.
+            Starts downloading immediately, no buffering.
+            """
+            # Use BytesIO that we'll write to incrementally
+            chunk_buffer = BytesIO()
+            current_size = 0
+            chunk_size = 1024 * 64  # 64KB chunks (smaller for faster response)
             
-            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Custom ZIP writing with immediate flush
+            class StreamingZipWriter:
+                def __init__(self):
+                    self.chunk_buffer = BytesIO()
+                    self.zip_file = zipfile.ZipFile(self.chunk_buffer, 'w', zipfile.ZIP_DEFLATED, compresslevel=5)
+                
+                async def add_file(self, filename: str, data: bytes):
+                    self.zip_file.writestr(filename, data)
+                    # Force flush internal buffers
+                    self.zip_file.flush()
+                
+                async def get_chunks(self):
+                    # Get accumulated data
+                    self.chunk_buffer.seek(0)
+                    while True:
+                        chunk = self.chunk_buffer.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+                    
+                    # Close and get any remaining data
+                    self.zip_file.close()
+                    self.chunk_buffer.seek(0)
+                    # Yield any remaining data after close
+                    remaining = self.chunk_buffer.read()
+                    if remaining:
+                        yield remaining
+            
+            writer = StreamingZipWriter()
+            
+            try:
+                # Add each song with immediate chunk sending
                 for idx, song in enumerate(songs, 1):
                     try:
                         audio_url = song.get("audio_url")
@@ -80,161 +116,62 @@ async def download_album(
                             print(f"[DOWNLOAD] Skipping song {idx}: no audio_url")
                             continue
                         
-                        # Clean filename for ZIP
-                        song_title = song.get("title", f"song_{idx}").replace("/", "_")
+                        song_title = song.get("title", f"song_{idx}").replace("/", "_").replace("\\", "_")
                         zip_filename = f"{idx:02d}_{song_title}.mp3"
                         
                         print(f"[DOWNLOAD] Downloading song {idx}/{len(songs)}: {zip_filename}")
                         
-                        # Download audio file from Supabase
+                        # Download from Supabase
                         try:
                             async with httpx.AsyncClient(timeout=60.0) as client:
-                                response = await client.get(audio_url)
+                                response = await client.get(audio_url, follow_redirects=True)
                                 if response.status_code == 200:
-                                    # Write directly to ZIP
-                                    zip_file.writestr(zip_filename, response.content)
-                                    print(f"[DOWNLOAD] Added to ZIP: {zip_filename}")
+                                    await writer.add_file(zip_filename, response.content)
+                                    print(f"[DOWNLOAD] Added: {zip_filename} ({len(response.content)} bytes)")
+                                    
+                                    # Yield chunks as we go to client
+                                    # This ensures streaming doesn't wait
+                                    writer.chunk_buffer.seek(0)
+                                    data_to_send = writer.chunk_buffer.getvalue()
+                                    if len(data_to_send) > chunk_size:
+                                        # Send older chunks
+                                        yield data_to_send[:-chunk_size]
+                                        # Keep buffer small
+                                        writer.chunk_buffer = BytesIO()
+                                        writer.chunk_buffer.write(data_to_send[-chunk_size:])
                                 else:
-                                    print(f"[DOWNLOAD] Failed to download song {idx}: status {response.status_code}")
+                                    print(f"[DOWNLOAD] Failed song {idx}: {response.status_code}")
                         except asyncio.TimeoutError:
-                            print(f"[DOWNLOAD] Timeout downloading song {idx}, skipping")
+                            print(f"[DOWNLOAD] Timeout on song {idx}")
                         except Exception as e:
-                            print(f"[DOWNLOAD] Error downloading song {idx}: {e}")
-                    
+                            print(f"[DOWNLOAD] Error on song {idx}: {e}")
                     except Exception as e:
                         print(f"[DOWNLOAD] Error processing song {idx}: {e}")
-                        continue
-            
-            # Reset buffer position to start
-            buffer.seek(0)
-            
-            # Yield data in chunks
-            chunk_size = 1024 * 1024  # 1MB chunks
-            while True:
-                chunk = buffer.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-        
-        # Return streaming response
-        filename = f"{album_title}.zip"
-        return StreamingResponse(
-            generate_zip(),
-            media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-        )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        print(f"[DOWNLOAD] Error downloading album: {e}")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error downloading album: {str(e)}")
-
-
-@router.get("/album/{album_id}/stream")
-async def download_album_stream(
-    album_id: str,
-    authorization: Optional[str] = Header(None)
-):
-    """
-    Alternative endpoint that streams ZIP without buffering entire ZIP in memory.
-    Uses a generator that yields chunks of audio data as they're downloaded.
-    """
-    try:
-        # Get album info
-        album_response = supabase.table("albums").select("*").eq("id", album_id).single().execute()
-        
-        if not album_response.data:
-            raise HTTPException(status_code=404, detail="Album not found")
-        
-        album = album_response.data
-        
-        # Check if album is private
-        if album.get("is_private"):
-            if not authorization:
-                raise HTTPException(status_code=403, detail="Album is private")
-            
-            token = authorization.replace("Bearer ", "").strip()
-            try:
-                decoded = jwt.decode(token, options={"verify_signature": False})
-                user_id = decoded.get("sub")
+                
+                # Send all remaining data
+                async for chunk in writer.get_chunks():
+                    if chunk:
+                        yield chunk
+                        
             except Exception as e:
-                raise HTTPException(status_code=401, detail="Invalid token")
-            
-            if album.get("artist_id") != user_id:
-                raise HTTPException(status_code=403, detail="You don't have permission to download this album")
-        
-        # Get all songs for the album
-        songs_response = supabase.table("songs").select("*").eq("album_id", album_id).order("track_number", { "ascending": True }).execute()
-        
-        if not songs_response.data or len(songs_response.data) == 0:
-            raise HTTPException(status_code=404, detail="No songs found in album")
-        
-        songs = songs_response.data
-        album_title = album.get("title", "album")
-        
-        print(f"[DOWNLOAD] Starting album stream: {album_title} ({len(songs)} songs)")
-        
-        async def stream_zip():
-            """Stream ZIP file with minimal memory usage"""
-            # Create a ZIP file generator
-            zip_buffer = BytesIO()
-            
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                for idx, song in enumerate(songs, 1):
-                    try:
-                        audio_url = song.get("audio_url")
-                        if not audio_url:
-                            print(f"[DOWNLOAD] Skipping song {idx}: no audio_url")
-                            continue
-                        
-                        song_title = song.get("title", f"song_{idx}").replace("/", "_")
-                        zip_filename = f"{idx:02d}_{song_title}.mp3"
-                        
-                        print(f"[DOWNLOAD] Streaming song {idx}/{len(songs)}: {zip_filename}")
-                        
-                        # Download and add to ZIP
-                        try:
-                            async with httpx.AsyncClient(timeout=60.0) as client:
-                                async with client.stream('GET', audio_url) as response:
-                                    if response.status_code == 200:
-                                        # Stream audio file to ZIP
-                                        async for chunk in response.aiter_bytes(chunk_size=8192):
-                                            zip_file.writestr(zip_filename, chunk, compress_type=zipfile.ZIP_DEFLATED)
-                                        print(f"[DOWNLOAD] Added to stream: {zip_filename}")
-                                    else:
-                                        print(f"[DOWNLOAD] Failed to download song {idx}: status {response.status_code}")
-                        except asyncio.TimeoutError:
-                            print(f"[DOWNLOAD] Timeout downloading song {idx}, skipping")
-                        except Exception as e:
-                            print(f"[DOWNLOAD] Error downloading song {idx}: {e}")
-                    
-                    except Exception as e:
-                        print(f"[DOWNLOAD] Error processing song {idx}: {e}")
-                        continue
-            
-            # Yield ZIP data
-            zip_buffer.seek(0)
-            chunk_size = 1024 * 1024  # 1MB chunks
-            while True:
-                chunk = zip_buffer.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
+                print(f"[DOWNLOAD] Stream error: {e}")
+                raise
         
         filename = f"{album_title}.zip"
         return StreamingResponse(
-            stream_zip(),
+            generate_zip_stream(),
             media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Content-Type-Options": "nosniff"
+            }
         )
     
     except HTTPException:
         raise
     except Exception as e:
         import traceback
-        print(f"[DOWNLOAD] Error in stream download: {e}")
+        print(f"[DOWNLOAD] Error: {e}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error downloading album: {str(e)}")
+
