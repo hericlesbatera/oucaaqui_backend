@@ -27,56 +27,56 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 router = APIRouter(prefix="/api/albums", tags=["album_download"])
 
 
+async def download_single_song(client, song, idx):
+    """Baixa uma única música e retorna os dados."""
+    audio_url = song.get('audio_url')
+    title = song.get('title', f'track_{idx}')[:50]
+    
+    if not audio_url:
+        return None
+    
+    try:
+        response = await client.get(audio_url, follow_redirects=True)
+        
+        if response.status_code == 200 and len(response.content) > 1000:
+            track_num = song.get('track_number') or idx
+            safe_title = "".join(c for c in title if c.isalnum() or c in ' -_').strip()
+            filename = f"{track_num:02d} - {safe_title}.mp3"
+            print(f"[ALBUM_DOWNLOAD] ✅ {filename} ({len(response.content)//1024}KB)")
+            return (filename, response.content)
+    except Exception as e:
+        print(f"[ALBUM_DOWNLOAD] ❌ {title}: {str(e)[:30]}")
+    
+    return None
+
+
 async def stream_zip(songs, album_title):
     """
-    Gera um ZIP com streaming para economizar memória.
-    Baixa uma música por vez e adiciona ao ZIP incrementalmente.
+    Gera um ZIP baixando músicas em PARALELO (muito mais rápido).
     """
-    print(f"[ALBUM_DOWNLOAD] Iniciando download de {len(songs)} músicas para '{album_title}'")
+    print(f"[ALBUM_DOWNLOAD] Iniciando download PARALELO de {len(songs)} músicas")
     
-    zip_buffer = io.BytesIO()
-    downloaded_count = 0
+    async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=10)) as client:
+        tasks = [download_single_song(client, song, idx) for idx, song in enumerate(songs, 1)]
+        results = await asyncio.gather(*tasks)
     
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zip_file:
-        for idx, song in enumerate(songs, 1):
-            audio_url = song.get('audio_url')
-            title = song.get('title', f'track_{idx}')[:50]
-            
-            if not audio_url:
-                print(f"[ALBUM_DOWNLOAD] ❌ Música {idx} sem URL: {title}")
-                continue
-            
-            print(f"[ALBUM_DOWNLOAD] ⏳ Baixando {idx}/{len(songs)}: {title}")
-            
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.get(audio_url, follow_redirects=True)
-                    
-                    if response.status_code == 200 and len(response.content) > 1000:
-                        track_num = song.get('track_number') or idx
-                        safe_title = "".join(c for c in title if c.isalnum() or c in ' -_').strip()
-                        filename = f"{track_num:02d} - {safe_title}.mp3"
-                        
-                        zip_file.writestr(filename, response.content)
-                        downloaded_count += 1
-                        print(f"[ALBUM_DOWNLOAD] ✅ OK: {filename} ({len(response.content)} bytes)")
-                    else:
-                        print(f"[ALBUM_DOWNLOAD] ❌ Falhou: {title} (status: {response.status_code})")
-                        
-            except Exception as e:
-                print(f"[ALBUM_DOWNLOAD] ❌ ERRO: {title} - {str(e)[:50]}")
-            
-            await asyncio.sleep(0.05)
+    downloaded_files = [r for r in results if r is not None]
     
-    if downloaded_count == 0:
+    if not downloaded_files:
         print("[ALBUM_DOWNLOAD] ❌ Nenhuma música baixada!")
         yield b"Erro: Nenhuma musica encontrada"
         return
     
-    print(f"[ALBUM_DOWNLOAD] ✅ ZIP criado com {downloaded_count} músicas")
+    print(f"[ALBUM_DOWNLOAD] ✅ {len(downloaded_files)} músicas baixadas, criando ZIP...")
+    
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zip_file:
+        for filename, content in downloaded_files:
+            zip_file.writestr(filename, content)
+    
+    print(f"[ALBUM_DOWNLOAD] 📦 ZIP criado: {zip_buffer.tell()//1024}KB")
     
     zip_buffer.seek(0)
-    
     while True:
         chunk = zip_buffer.read(65536)
         if not chunk:
