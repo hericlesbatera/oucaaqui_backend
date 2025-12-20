@@ -446,42 +446,68 @@ const AlbumPage = () => {
     };
 
     const handleDownloadAlbum = async () => {
-        if (album.archiveUrl) {
-            toast({
-                title: 'Download Iniciado',
-                description: `Baixando ${album.title}...`
-            });
-            try {
-                // Registrar download (incrementa albums.download_count e songs.downloads)
-                if (album.id) {
-                    const songIds = albumSongs.map(s => s.id);
-                    recordAlbumDownload(album.id, songIds);
-                    setAlbum(prev => ({ ...prev, download_count: (prev.download_count || 0) + 1 }));
-                }
-
-                const response = await fetch(album.archiveUrl);
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                const extension = album.archiveUrl.includes('.rar') ? 'rar' : 'zip';
-                link.download = `${album.title}.${extension}`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Download error:', error);
-                toast({
-                    title: 'Erro no Download',
-                    description: 'Não foi possível baixar o arquivo',
-                    variant: 'destructive'
-                });
-            }
-        } else {
+        if (albumSongs.length === 0) {
             toast({
                 title: 'Download Indisponível',
-                description: 'O arquivo do álbum não está disponível',
+                description: 'Este álbum não possui músicas',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        toast({
+            title: 'Download Iniciado',
+            description: `Montando arquivo ZIP com ${albumSongs.length} músicas...`
+        });
+
+        try {
+            // Registrar download (incrementa albums.download_count e songs.downloads)
+            if (album.id) {
+                const songIds = albumSongs.map(s => s.id);
+                recordAlbumDownload(album.id, songIds);
+                setAlbum(prev => ({ ...prev, download_count: (prev.download_count || 0) + 1 }));
+            }
+
+            // Get auth token
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            // Call backend API to get streaming ZIP
+            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+            const downloadUrl = `${apiUrl}/api/download/album/${album.id}`;
+
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            // Fetch the ZIP file
+            const response = await fetch(downloadUrl, { headers });
+
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.statusText}`);
+            }
+
+            // Create blob from response
+            const blob = await response.blob();
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${album.title}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up object URL
+            URL.revokeObjectURL(link.href);
+
+            toast({
+                title: 'Download Completo',
+                description: `${album.title} foi baixado com sucesso!`
+            });
+        } catch (error) {
+            console.error('Download error:', error);
+            toast({
+                title: 'Erro no Download',
+                description: error.message || 'Não foi possível baixar o arquivo',
                 variant: 'destructive'
             });
         }
