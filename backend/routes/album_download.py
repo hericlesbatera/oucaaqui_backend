@@ -7,7 +7,6 @@ import httpx
 import io
 import zipfile
 import asyncio
-from zipstream import ZipStream
 import logging
 from datetime import datetime
 import traceback
@@ -68,9 +67,9 @@ async def download_single_song(client, song, idx):
 
 async def stream_zip(songs, album_title):
     """
-    Gera um ZIP com ZipStream - baixa e faz stream simultâneamente (download imediato).
+    Gera um ZIP usando BytesIO - cria em memória e faz stream (download imediato).
     """
-    logger.info(f"Iniciando download PARALELO de {len(songs)} músicas com ZipStream")
+    logger.info(f"Iniciando download PARALELO de {len(songs)} músicas")
     
     # Baixar todas as músicas em paralelo
     async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=10)) as client:
@@ -86,32 +85,38 @@ async def stream_zip(songs, album_title):
         yield b"Erro: Nenhuma musica encontrada"
         return
 
-    logger.info(f"✅ Iniciando stream do ZIP com {len(downloaded_files)} arquivos...")
+    logger.info(f"✅ Criando ZIP em memória com {len(downloaded_files)} arquivos...")
     
-    # Converter lista de tuplas para dicionário
-    files_dict = {filename: content for filename, content in downloaded_files}
-    logger.info(f"Dicionário criado: {len(files_dict)} arquivos")
-    logger.info(f"Conteúdo do dicionário: {list(files_dict.keys())}")
-    
-    # Criar ZipStream e fazer yield dos chunks
+    # Criar ZIP em memória usando BytesIO
     try:
-        logger.info(f"ZipStream version: {ZipStream.__module__}")
-        zs = ZipStream(files=files_dict, compression=zipfile.ZIP_DEFLATED, chunksize=262144)
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename, content in downloaded_files:
+                logger.info(f"Adicionando {filename} ao ZIP ({len(content)//1024}KB)")
+                zf.writestr(filename, content)
+        
+        zip_size = zip_buffer.tell()
+        logger.info(f"✅ ZIP criado com sucesso ({zip_size//1024}KB)")
+        
+        # Stream do ZIP em chunks
+        zip_buffer.seek(0)
+        chunk_size = 262144  # 256KB chunks
         chunk_count = 0
         total_bytes = 0
         
-        for chunk in zs:
-            if chunk:  # Garantir que chunk não é vazio
-                chunk_count += 1
-                total_bytes += len(chunk)
-                if chunk_count == 1:
-                    logger.info(f"✅ Primeiro chunk do ZIP enviado (streaming ativo) - tamanho: {len(chunk)} bytes")
-                yield chunk
+        while True:
+            chunk = zip_buffer.read(chunk_size)
+            if not chunk:
+                break
+            chunk_count += 1
+            total_bytes += len(chunk)
+            if chunk_count == 1:
+                logger.info(f"✅ Primeiro chunk do ZIP enviado (streaming ativo) - tamanho: {len(chunk)} bytes")
+            yield chunk
         
         logger.info(f"✅ Fim do streaming. Total de chunks: {chunk_count}, Total de bytes: {total_bytes}")
     except Exception as e:
-        logger.error(f"❌ Erro no ZipStream: {str(e)}")
-        import traceback
+        logger.error(f"❌ Erro ao criar ZIP: {str(e)}")
         logger.error(traceback.format_exc())
         raise
 
