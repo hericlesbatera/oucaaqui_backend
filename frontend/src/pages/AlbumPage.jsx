@@ -608,13 +608,12 @@ const AlbumPage = () => {
         } catch (error) {
             console.error('Download error:', error);
             setDownloadModalOpen(false);
+            setDownloadInProgress(false);
             toast({
-                title: 'Erro no Download',
+                title: '❌ Erro no Download',
                 description: error?.message || 'Não foi possível baixar o arquivo',
                 variant: 'destructive'
             });
-        } finally {
-            setDownloadInProgress(false);
         }
     };
 
