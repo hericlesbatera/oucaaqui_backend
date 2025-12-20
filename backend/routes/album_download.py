@@ -84,19 +84,22 @@ async def stream_zip(songs, album_title):
     
     # Baixar SEQUENCIALMENTE mas ENVIAR IMEDIATAMENTE (sem esperar tudo)
     try:
-        # Criar ZIP em memória
+        # Criar ZIP em memória (sem compressão = mais rápido)
         zip_buffer = io.BytesIO()
-        zf = zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED)
+        zf = zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED)
         
         # Baixar e adicionar ao ZIP sob demanda
         logger.info(f"⏱️  Iniciando download paralelo...")
         start_download = time.time()
         
         async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=500, max_keepalive_connections=500)) as client:
+            # Baixar TODAS as músicas em PARALELO em vez de sequencial
+            tasks = [download_single_song(client, song, idx) for idx, song in enumerate(songs, 1)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
             files_added = 0
-            for idx, song in enumerate(songs, 1):
-                result = await download_single_song(client, song, idx)
-                if result:
+            for result in results:
+                if result and not isinstance(result, Exception):
                     filename, content = result
                     zf.writestr(filename, content)
                     files_added += 1
