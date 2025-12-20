@@ -2,10 +2,11 @@ from fastapi import APIRouter, HTTPException
 from supabase import create_client
 import os
 from dotenv import load_dotenv
-import requests
+import httpx
 import io
 import zipfile
 from datetime import datetime
+import asyncio
 
 load_dotenv()
 
@@ -37,7 +38,7 @@ def get_album_songs(album_id):
         return []
 
 
-def create_album_zip(album_id, album_title, songs):
+async def create_album_zip(album_id, album_title, songs):
     if not songs:
         return None
     
@@ -46,18 +47,19 @@ def create_album_zip(album_id, album_title, songs):
         
         # Usar ZIP_STORED (sem compressão) para ser mais rápido
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zip_file:
-            for idx, song in enumerate(songs, 1):
-                try:
-                    if song.get('audio_url'):
-                        response = requests.get(song['audio_url'], timeout=30)
-                        if response.status_code == 200:
-                            track_num = song.get('track_number', 0)
-                            filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
-                            zip_file.writestr(filename, response.content)
-                except requests.Timeout:
-                    pass
-                except Exception:
-                    pass
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                for idx, song in enumerate(songs, 1):
+                    try:
+                        if song.get('audio_url'):
+                            response = await client.get(song['audio_url'], follow_redirects=True)
+                            if response.status_code == 200:
+                                track_num = song.get('track_number', 0)
+                                filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
+                                zip_file.writestr(filename, response.content)
+                    except asyncio.TimeoutError:
+                        pass
+                    except Exception:
+                        pass
         
         zip_buffer.seek(0)
         return zip_buffer.getvalue()
@@ -117,7 +119,7 @@ async def generate_archives():
             songs = get_album_songs(album_id)
             
             if songs:
-                zip_content = create_album_zip(album_id, album_title, songs)
+                zip_content = await create_album_zip(album_id, album_title, songs)
                 
                 if zip_content:
                     archive_url = upload_archive_to_storage(album_id, album_title, zip_content)
