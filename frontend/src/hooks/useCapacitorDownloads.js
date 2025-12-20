@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
-import { CapacitorHttp } from '@capacitor/core';
 
 const DOWNLOADS_DIR = 'downloads';
 const METADATA_KEY = 'downloads_metadata';
@@ -87,57 +86,45 @@ const downloadFile = async (url, fileName, albumDir) => {
         console.log(`🌐 Iniciando download: ${fileName}`);
         console.log(`   URL: ${url}`);
 
-        // Usar CapacitorHttp nativo (ignora CORS)
+        // Usar fetch com timeout de 2 minutos
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        
         let base64Data;
         
         try {
-            console.log(`   Usando CapacitorHttp (nativo)...`);
-            const response = await CapacitorHttp.get({
-                url: url,
-                responseType: 'blob',
-                headers: {
-                    'Accept': 'audio/mpeg,audio/*,*/*'
-                }
+            const response = await fetch(url, {
+                method: 'GET',
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             
-            if (response.status !== 200) {
-                throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} - ${response.statusText}`);
             }
             
-            // CapacitorHttp retorna data como base64 quando responseType é blob
-            base64Data = response.data;
-            console.log(`   ✅ CapacitorHttp OK - ${(base64Data?.length || 0)} chars`);
+            const blob = await response.blob();
+            console.log(`   Blob recebido: ${blob.size} bytes, type: ${blob.type}`);
             
-        } catch (nativeError) {
-            console.warn(`   CapacitorHttp falhou: ${nativeError.message}, tentando fetch...`);
-            
-            // Fallback para fetch normal
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 120000);
-            
-            try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const blob = await response.blob();
-                if (blob.size === 0) {
-                    throw new Error('Arquivo vazio');
-                }
-                
-                base64Data = await blobToBase64(blob);
-                console.log(`   ✅ Fetch OK - ${blob.size} bytes`);
-                
-            } catch (fetchError) {
-                clearTimeout(timeoutId);
-                throw new Error(`Download falhou: ${fetchError.message}`);
+            if (blob.size === 0) {
+                throw new Error('Arquivo vazio (0 bytes)');
             }
+            
+            if (blob.size < 1000) {
+                // Muito pequeno para ser uma música, pode ser erro HTML
+                const text = await blob.text();
+                throw new Error(`Resposta inválida: ${text.substring(0, 100)}`);
+            }
+            
+            base64Data = await blobToBase64(blob);
+            console.log(`   ✅ Download OK - ${blob.size} bytes`);
+            
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Timeout - conexão muito lenta');
+            }
+            throw new Error(`${fetchError.message}`);
         }
 
         // Remove o prefixo data:audio/mpeg;base64, se existir
