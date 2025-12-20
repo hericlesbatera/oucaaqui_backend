@@ -174,17 +174,33 @@ export const useCapacitorDownloads = () => {
     }, []);
 
     const downloadAlbum = useCallback(async (album, songs) => {
+        console.log('🎵 downloadAlbum chamado');
+        console.log('Album:', album);
+        console.log('Songs:', songs);
+        console.log('isCapacitorAvailable:', isCapacitorAvailable());
+        
         if (!isCapacitorAvailable()) {
+            console.error('❌ Capacitor não disponível!');
             throw new Error('Capacitor não disponível');
         }
 
         try {
             const albumDir = sanitizePath(album.title);
+            console.log('📁 Pasta do álbum:', albumDir);
             const downloadedSongs = [];
 
             for (let i = 0; i < songs.length; i++) {
                 const song = songs[i];
+                const songUrl = song.url || song.audio_url || song.audioUrl;
                 const fileName = `${String(i + 1).padStart(2, '0')} - ${sanitizePath(song.title)}.mp3`;
+
+                console.log(`⏳ Baixando ${i + 1}/${songs.length}: ${song.title}`);
+                console.log(`   URL: ${songUrl}`);
+
+                if (!songUrl) {
+                    console.error(`❌ URL não encontrada para: ${song.title}`);
+                    continue;
+                }
 
                 setDownloadProgress(prev => ({
                     ...prev,
@@ -192,14 +208,15 @@ export const useCapacitorDownloads = () => {
                 }));
 
                 try {
-                    await downloadFile(song.url, fileName, albumDir);
+                    await downloadFile(songUrl, fileName, albumDir);
                     downloadedSongs.push({
                         id: song.id,
                         title: song.title,
                         fileName: fileName
                     });
+                    console.log(`✅ Baixado: ${song.title}`);
                 } catch (error) {
-                    console.error(`Erro ao baixar ${song.title}:`, error);
+                    console.error(`❌ Erro ao baixar ${song.title}:`, error);
                 }
             }
 
