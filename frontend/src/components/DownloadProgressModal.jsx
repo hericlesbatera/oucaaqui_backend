@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 
+// DEBUG BUTTON v1.0
+
 export const DownloadProgressModal = ({ 
   isOpen, 
   status, 
