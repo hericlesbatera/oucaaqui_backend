@@ -30,7 +30,14 @@ const AlbumPage = () => {
      const navigate = useNavigate();
      const { playSong, currentSong, isPlaying, togglePlay, setIsFullPlayerOpen } = usePlayer();
      const { user, isPremium } = useAuth();
-     const { downloadAlbum, downloadProgress, isAlbumDownloaded } = useCapacitorDownloads();
+     const { downloadAlbum, downloadProgress, isAlbumDownloaded } = useCapacitorDownloads((downloadInfo) => {
+        if (downloadInfo) {
+            setCurrentDownloadSong(downloadInfo.song);
+            setCurrentDownloadIndex(downloadInfo.index);
+            const progress = (downloadInfo.index / downloadInfo.total) * 100;
+            setDownloadProgress(progress);
+        }
+     });
      const [isFavorite, setIsFavorite] = useState(false);
      const [album, setAlbum] = useState(null);
      const [albumSongs, setAlbumSongs] = useState([]);
@@ -44,9 +51,12 @@ const AlbumPage = () => {
      const [showMobilePlayer, setShowMobilePlayer] = useState(false);
        const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
        const [downloadInProgress, setDownloadInProgress] = useState(false);
-       const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed'
+       const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed', 'error'
        const [downloadProgress, setDownloadProgress] = useState(0);
        const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+       const [downloadErrorMessage, setDownloadErrorMessage] = useState('');
+       const [currentDownloadSong, setCurrentDownloadSong] = useState('');
+       const [currentDownloadIndex, setCurrentDownloadIndex] = useState(0);
 
     useEffect(() => {
         let isMounted = true; // Flag para evitar state updates após unmount
@@ -596,24 +606,53 @@ const AlbumPage = () => {
                     clearInterval(preparingInterval);
                     setDownloadStatus('downloading');
 
-                    const result = await downloadAlbum(albumData, songs);
+                    try {
+                        const result = await downloadAlbum(albumData, songs);
 
-                    setDownloadProgress(100);
-                    setDownloadStatus('completed');
-
-                    return result;
+                        setDownloadProgress(100);
+                        setDownloadStatus('completed');
+                        
+                        return result;
+                    } catch (error) {
+                        console.error('❌ Erro no download mobile:', error);
+                        
+                        // Montar mensagem de erro com debug info
+                        let errorMsg = error?.message || 'Falha ao baixar. Verifique sua conexão e espaço disponível no celular.';
+                        
+                        // Se houver logs de debug, adicionar à mensagem
+                        if (error?.debugLogs && error.debugLogs.length > 0) {
+                            const lastLog = error.debugLogs[error.debugLogs.length - 1];
+                            if (lastLog && !errorMsg.includes(lastLog)) {
+                                errorMsg = `${errorMsg}\n\nÚltimo log: ${lastLog}`;
+                            }
+                        }
+                        
+                        setDownloadErrorMessage(errorMsg);
+                        setDownloadStatus('error');
+                        throw error;
+                    }
                 }
             });
 
         } catch (error) {
             console.error('Download error:', error);
-            setDownloadModalOpen(false);
             setDownloadInProgress(false);
-            toast({
-                title: '❌ Erro no Download',
-                description: error?.message || 'Não foi possível baixar o arquivo',
-                variant: 'destructive'
-            });
+            
+            // Se o status ainda é 'downloading', significa que o erro ocorreu no Capacitor
+            if (downloadStatus === 'downloading') {
+                const errorMsg = error?.message || 'Falha ao baixar. Verifique sua conexão e espaço disponível no celular.';
+                setDownloadErrorMessage(errorMsg);
+                setDownloadStatus('error');
+                // Manter modal aberto para mostrar o erro
+            } else {
+                // Para desktop, fechar modal
+                setDownloadModalOpen(false);
+                toast({
+                    title: '❌ Erro no Download',
+                    description: error?.message || 'Não foi possível baixar o arquivo',
+                    variant: 'destructive'
+                });
+            }
         }
     };
 
@@ -1269,7 +1308,17 @@ const AlbumPage = () => {
               progress={downloadProgress}
               albumTitle={album?.title}
               songCount={albumSongs.length}
-              onClose={() => setDownloadModalOpen(false)}
+              currentSong={currentDownloadSong}
+              currentSongIndex={currentDownloadIndex}
+              errorMessage={downloadErrorMessage}
+              onClose={() => {
+                setDownloadModalOpen(false);
+                setDownloadStatus('preparing');
+                setDownloadProgress(0);
+                setDownloadErrorMessage('');
+                setCurrentDownloadSong('');
+                setCurrentDownloadIndex(0);
+              }}
             />
 
             </div>

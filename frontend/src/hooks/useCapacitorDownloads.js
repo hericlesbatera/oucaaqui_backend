@@ -80,6 +80,8 @@ const ensureDownloadsDir = async () => {
 
 // Converter URL para arquivo local
 const downloadFile = async (url, fileName, albumDir) => {
+    const startTime = Date.now();
+    
     try {
         if (!url) {
             throw new Error(`❌ URL vazia para arquivo ${fileName}`);
@@ -88,12 +90,22 @@ const downloadFile = async (url, fileName, albumDir) => {
         console.log(`🌐 Iniciando download: ${fileName}`);
         console.log(`   URL: ${url}`);
 
-        const response = await fetch(url, {
-            method: 'GET',
-            cache: 'no-store',
-            referrerPolicy: 'no-referrer',
-            headers: { 'Accept': 'audio/mpeg,*/*' }
-        });
+        // Adicionar timeout no fetch também (30 segundos)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'GET',
+                cache: 'no-store',
+                referrerPolicy: 'no-referrer',
+                headers: { 'Accept': 'audio/mpeg,*/*' },
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
             throw new Error(`❌ Erro HTTP ${response.status} ao baixar ${fileName}`);
@@ -101,7 +113,8 @@ const downloadFile = async (url, fileName, albumDir) => {
 
         console.log(`📥 Recebido blob para ${fileName}`);
         const blob = await response.blob();
-        console.log(`   Tamanho: ${blob.size} bytes`);
+        const fileSizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        console.log(`   Tamanho: ${blob.size} bytes (${fileSizeMB}MB)`);
 
         if (blob.size === 0) {
             throw new Error(`❌ Arquivo vazio: ${fileName}`);
@@ -129,13 +142,18 @@ const downloadFile = async (url, fileName, albumDir) => {
             });
             console.log(`📁 Pasta criada/verificada: ${albumPath}`);
         } catch (mkdirError) {
-            console.warn(`⚠️ Erro ao criar pasta (pode já existir): ${mkdirError.message}`);
+            // Ignorar erro se pasta já existe
+            if (mkdirError.message && mkdirError.message.includes('exist')) {
+                console.log(`📁 Pasta já existe: ${albumPath}`);
+            } else {
+                throw mkdirError;
+            }
         }
 
         // Salvar arquivo em base64
         const filePath = `${albumPath}/${fileName}`;
         console.log(`💾 Salvando arquivo: ${filePath}`);
-        console.log(`   Tamanho base64: ${cleanBase64.length} caracteres`);
+        console.log(`   Tamanho base64: ${cleanBase64.length} caracteres (${(cleanBase64.length / 1024 / 1024).toFixed(2)}MB)`);
 
         const writeResult = await Filesystem.writeFile({
             path: filePath,
@@ -144,23 +162,35 @@ const downloadFile = async (url, fileName, albumDir) => {
             encoding: Encoding.Base64
         });
 
+        const elapsed = Date.now() - startTime;
         console.log(`✅ Arquivo salvo com sucesso: ${filePath}`);
+        console.log(`   Tempo total: ${elapsed}ms (${(elapsed / 1000).toFixed(2)}s)`);
         console.log(`   Resultado: ${JSON.stringify(writeResult)}`);
         return true;
     } catch (error) {
-        console.error(`❌ Erro ao baixar arquivo ${fileName}:`, error);
-        console.error(`   Stack: ${error.stack}`);
+        const elapsed = Date.now() - startTime;
+        console.error(`❌ Erro ao baixar arquivo ${fileName} (após ${(elapsed / 1000).toFixed(2)}s):`, error);
+        console.error(`   Mensagem: ${error.message}`);
+        if (error.stack) {
+            console.error(`   Stack: ${error.stack}`);
+        }
         throw error;
     }
 };
 
-// Converter Blob para Base64
+// Converter Blob para Base64 com timeout e otimização
 const blobToBase64 = (blob) => {
     return new Promise((resolve, reject) => {
         try {
+            // Implementar timeout para evitar travar em arquivos grandes
+            const timeoutId = setTimeout(() => {
+                reject(new Error('❌ Timeout na conversão Base64 - arquivo muito grande ou conexão lenta'));
+            }, 60000); // 60 segundos de timeout
+
             const reader = new FileReader();
 
             reader.onloadend = () => {
+                clearTimeout(timeoutId);
                 try {
                     if (!reader.result) {
                         throw new Error('❌ FileReader retornou resultado vazio');
@@ -175,7 +205,7 @@ const blobToBase64 = (blob) => {
                         throw new Error('❌ Base64 está vazio após split');
                     }
 
-                    console.log(`✅ Blob convertido para base64 (${base64.length} chars)`);
+                    console.log(`✅ Blob convertido para base64 (${base64.length} chars, ${(base64.length / 1024 / 1024).toFixed(2)}MB)`);
                     resolve(reader.result); // Retorna com prefixo para compatibilidade
                 } catch (error) {
                     reject(error);
@@ -183,6 +213,7 @@ const blobToBase64 = (blob) => {
             };
 
             reader.onerror = (error) => {
+                clearTimeout(timeoutId);
                 console.error('❌ Erro no FileReader:', error);
                 reject(new Error(`FileReader error: ${error.message}`));
             };
@@ -190,7 +221,8 @@ const blobToBase64 = (blob) => {
             reader.onprogress = (event) => {
                 if (event.lengthComputable) {
                     const progress = (event.loaded / event.total * 100).toFixed(0);
-                    console.log(`   Progresso conversão: ${progress}%`);
+                    const mb = (event.loaded / 1024 / 1024).toFixed(2);
+                    console.log(`   Progresso conversão: ${progress}% (${mb}MB)`);
                 }
             };
 
@@ -233,7 +265,7 @@ const deleteDirectory = async (dirPath) => {
 };
 
 // Hook customizado
-export const useCapacitorDownloads = () => {
+export const useCapacitorDownloads = (onSongDownloadStart) => {
     const [downloads, setDownloads] = useState([]);
     const [loading, setLoading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState({});
@@ -259,16 +291,30 @@ export const useCapacitorDownloads = () => {
     }, []);
 
     const downloadAlbum = useCallback(async (album, songs) => {
-        console.log('==========================================');
-        console.log('🎵 INICIANDO DOWNLOAD DE ALBUM');
-        console.log('==========================================');
-        console.log('Album:', {
-            id: album?.id,
-            title: album?.title,
-            artist: album?.artist_name
-        });
-        console.log('Número de músicas:', songs?.length);
-        console.log('Capacitor disponível:', isCapacitorAvailable());
+        // Capturar logs para debug
+        const debugLogs = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        const captureLog = (...args) => {
+            originalLog(...args);
+            debugLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+        };
+        
+        console.log = captureLog;
+        console.error = captureLog;
+        
+        try {
+            console.log('==========================================');
+            console.log('🎵 INICIANDO DOWNLOAD DE ALBUM');
+            console.log('==========================================');
+            console.log('Album:', {
+                id: album?.id,
+                title: album?.title,
+                artist: album?.artist_name
+            });
+            console.log('Número de músicas:', songs?.length);
+            console.log('Capacitor disponível:', isCapacitorAvailable());
 
         if (!isCapacitorAvailable()) {
             console.error('❌ Capacitor não disponível! Abortando download.');
@@ -321,6 +367,15 @@ export const useCapacitorDownloads = () => {
                     ...prev,
                     [album.id]: { current: i + 1, total: songs.length }
                 }));
+
+                // Callback para informar qual música está sendo baixada
+                if (onSongDownloadStart) {
+                    onSongDownloadStart({
+                        song: song.title,
+                        index: i + 1,
+                        total: songs.length
+                    });
+                }
 
                 try {
                     console.log(`   Iniciando download...`);
@@ -396,12 +451,25 @@ export const useCapacitorDownloads = () => {
             console.log('   Músicas:', downloadedSongs.length);
             console.log('==========================================\n');
 
+            // Restaurar console originais
+            console.log = originalLog;
+            console.error = originalError;
+            
             return albumDownload;
         } catch (error) {
             console.error('❌ ERRO GERAL NO DOWNLOAD:', error);
             console.error('   Mensagem:', error.message);
             console.error('   Stack:', error.stack);
 
+            // Restaurar console originais
+            console.log = originalLog;
+            console.error = originalError;
+            
+            // Adicionar logs de debug ao erro
+            const errorWithDebug = new Error(error.message);
+            errorWithDebug.debugLogs = debugLogs.slice(-50); // Últimos 50 logs
+            errorWithDebug.stack = error.stack;
+            
             // Limpar progresso em caso de erro
             setDownloadProgress(prev => {
                 const newProgress = { ...prev };
@@ -409,7 +477,7 @@ export const useCapacitorDownloads = () => {
                 return newProgress;
             });
 
-            throw error;
+            throw errorWithDebug;
         }
     }, [downloads]);
 
