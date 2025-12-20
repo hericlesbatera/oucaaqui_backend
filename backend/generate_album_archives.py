@@ -8,7 +8,7 @@ import os
 import io
 import sys
 import zipfile
-import requests
+import httpx
 from datetime import datetime
 from supabase import create_client
 from dotenv import load_dotenv
@@ -45,24 +45,25 @@ def create_album_zip(album_id, album_title, songs):
         
         # Usar ZIP_STORED (sem compressão) para ser mais rápido
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_STORED) as zip_file:
-            for idx, song in enumerate(songs, 1):
-                try:
-                    if song.get('audio_url'):
-                        title = song.get('title', f'track_{idx}')[:40]
-                        print(f"    Baixando: {title}", end=' ... ', flush=True)
-                        response = requests.get(song['audio_url'], timeout=30)
-                        if response.status_code == 200:
-                            track_num = song.get('track_number', 0)
-                            filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
-                            zip_file.writestr(filename, response.content)
-                            size_kb = len(response.content) // 1024
-                            print(f"[OK - {size_kb}KB]")
-                        else:
-                            print(f"[{response.status_code}]")
-                except requests.Timeout:
-                    print("[TIMEOUT]")
-                except Exception as e:
-                    print(f"[ERRO: {str(e)[:20]}]")
+            with httpx.Client(timeout=60.0) as client:
+                for idx, song in enumerate(songs, 1):
+                    try:
+                        if song.get('audio_url'):
+                            title = song.get('title', f'track_{idx}')[:40]
+                            print(f"    Baixando: {title}", end=' ... ', flush=True)
+                            response = client.get(song['audio_url'], follow_redirects=True)
+                            if response.status_code == 200:
+                                track_num = song.get('track_number', 0)
+                                filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
+                                zip_file.writestr(filename, response.content)
+                                size_kb = len(response.content) // 1024
+                                print(f"[OK - {size_kb}KB]")
+                            else:
+                                print(f"[{response.status_code}]")
+                    except httpx.TimeoutException:
+                        print("[TIMEOUT]")
+                    except Exception as e:
+                        print(f"[ERRO: {str(e)[:20]}]")
         
         zip_buffer.seek(0)
         return zip_buffer.getvalue()

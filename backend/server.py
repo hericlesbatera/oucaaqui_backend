@@ -11,7 +11,6 @@ from routes.artist_videos import router as artist_videos_router
 from routes.cleanup import router as cleanup_router
 from routes.music_files import router as music_files_router
 from routes.album_download import router as album_download_router
-from routes.generate_archives import router as generate_archives_router
 
 app = FastAPI()
 
@@ -33,7 +32,6 @@ app.include_router(artist_videos_router)
 app.include_router(cleanup_router)
 app.include_router(music_files_router)
 app.include_router(album_download_router)
-app.include_router(generate_archives_router)
 
 @app.get("/health")
 def health_check():
