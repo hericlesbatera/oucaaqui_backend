@@ -55,11 +55,14 @@ async def stream_zip(songs, album_title):
     Gera um ZIP baixando músicas em PARALELO (muito mais rápido).
     """
     print(f"[ALBUM_DOWNLOAD] Iniciando download PARALELO de {len(songs)} músicas")
+    print(f"[ALBUM_DOWNLOAD] Baixando músicas do álbum '{album_title}'...")
     async with httpx.AsyncClient(timeout=60.0, limits=httpx.Limits(max_connections=10)) as client:
         tasks = [download_single_song(client, song, idx) for idx, song in enumerate(songs, 1)]
         results = await asyncio.gather(*tasks)
 
     downloaded_files = [r for r in results if r is not None]
+    print(f"[ALBUM_DOWNLOAD] Arquivos baixados: {[f[0] for f in downloaded_files]}")
+    print(f"[ALBUM_DOWNLOAD] Total de arquivos baixados: {len(downloaded_files)}")
 
     if not downloaded_files:
         print("[ALBUM_DOWNLOAD] ❌ Nenhuma música baixada!")
@@ -70,8 +73,13 @@ async def stream_zip(songs, album_title):
     file_dict = {filename: content for filename, content in downloaded_files}
     print(f"[ALBUM_DOWNLOAD] Using ZipStream for true streaming (forçado)")
     zs = ZipStream(file_dict, compression=zipfile.ZIP_DEFLATED, chunksize=262144)
+    chunk_count = 0
     for chunk in zs:
+        chunk_count += 1
+        if chunk_count == 1:
+            print(f"[ALBUM_DOWNLOAD] Primeiro chunk do ZIP enviado.")
         yield chunk
+    print(f"[ALBUM_DOWNLOAD] Fim do streaming ZIP. Total de chunks enviados: {chunk_count}")
 
 
 @router.get("/{album_id}/download")
