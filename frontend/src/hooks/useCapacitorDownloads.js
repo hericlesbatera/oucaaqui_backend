@@ -89,8 +89,10 @@ const downloadFile = async (url, fileName, albumDir) => {
         console.log(`   URL: ${url}`);
 
         const response = await fetch(url, {
-            credentials: 'include',
-            method: 'GET'
+            method: 'GET',
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer',
+            headers: { 'Accept': 'audio/mpeg,*/*' }
         });
 
         if (!response.ok) {

@@ -12,6 +12,7 @@ import { Play, Heart, Share2, Download, Plus, BadgeCheck, Copy, X, Disc, ThumbsU
 import { Button } from '../components/ui/button';
 import { toast } from '../hooks/use-toast';
 import AlbumSongRow from '../components/AlbumSongRow';
+import DownloadProgressModal from '../components/DownloadProgressModal';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -43,6 +44,9 @@ const AlbumPage = () => {
      const [showMobilePlayer, setShowMobilePlayer] = useState(false);
        const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
        const [downloadInProgress, setDownloadInProgress] = useState(false);
+       const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed'
+       const [downloadProgress, setDownloadProgress] = useState(0);
+       const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
     useEffect(() => {
         let isMounted = true; // Flag para evitar state updates após unmount
@@ -483,6 +487,10 @@ const AlbumPage = () => {
         }
 
         setDownloadInProgress(true);
+        setDownloadModalOpen(true);
+        setDownloadStatus('preparing');
+        setDownloadProgress(0);
+        
         try {
             // Registrar download imediatamente
             const songIds = albumSongs.map(s => s?.id).filter(Boolean);
@@ -490,6 +498,17 @@ const AlbumPage = () => {
                 recordAlbumDownload(album.id, songIds);
             }
             setAlbum(prev => prev ? { ...prev, download_count: (prev.download_count || 0) + 1 } : prev);
+
+            // Simular progresso de preparação
+            let preparingProgress = 0;
+            const preparingInterval = setInterval(() => {
+                preparingProgress += Math.random() * 30;
+                if (preparingProgress >= 90) {
+                    preparingProgress = 90;
+                    clearInterval(preparingInterval);
+                }
+                setDownloadProgress(preparingProgress);
+            }, 200);
 
             // Usar handleDownload para detectar plataforma
             await handleDownload({
@@ -502,11 +521,9 @@ const AlbumPage = () => {
                         downloadUrl = `/api/albums/${album.id}/download`;
                     }
 
-                    toast({
-                        title: '⏳ Preparando Download',
-                        description: `Aguarde, estamos preparando ${albumSongs.length} músicas...`,
-                        duration: 60000
-                    });
+                    clearInterval(preparingInterval);
+                    setDownloadStatus('downloading');
+                    setDownloadProgress(90);
 
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
@@ -523,29 +540,52 @@ const AlbumPage = () => {
                             throw new Error(`Erro HTTP: ${response.status}`);
                         }
 
-                        toast({
-                            title: '📥 Baixando...',
-                            description: 'O arquivo está sendo transferido para seu computador',
-                            duration: 30000
-                        });
+                        // Progresso do download com base no tamanho
+                        const contentLength = response.headers.get('content-length');
+                        if (contentLength) {
+                            let receivedLength = 0;
+                            const reader = response.body.getReader();
+                            const chunks = [];
 
-                        const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
-                        const filename = `${album.title}.${extension}`;
-                        
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = filename;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        window.URL.revokeObjectURL(url);
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                chunks.push(value);
+                                receivedLength += value.length;
+                                const progress = 90 + (receivedLength / contentLength) * 10;
+                                setDownloadProgress(Math.min(progress, 99));
+                            }
 
-                        toast({
-                            title: '✅ Download Concluído!',
-                            description: `${album.title} foi baixado com sucesso`
-                        });
+                            const blob = new Blob(chunks);
+                            const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
+                            const filename = `${album.title}.${extension}`;
+                            
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                        } else {
+                            // Se não houver content-length, faz o download normal
+                            const blob = await response.blob();
+                            const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
+                            const filename = `${album.title}.${extension}`;
+                            
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                        }
+
+                        setDownloadProgress(100);
+                        setDownloadStatus('completed');
                     } catch (fetchError) {
                         clearTimeout(timeoutId);
                         throw fetchError;
@@ -553,17 +593,13 @@ const AlbumPage = () => {
                 },
                 onMobile: async ({ album: albumData, albumSongs: songs, onProgress }) => {
                     // Mobile: download MP3s individuais com Capacitor
-                    toast({
-                        title: '⏳ Aguarde',
-                        description: `Baixando ${songs.length} músicas...`
-                    });
+                    clearInterval(preparingInterval);
+                    setDownloadStatus('downloading');
 
                     const result = await downloadAlbum(albumData, songs);
 
-                    toast({
-                        title: '✅ Sucesso',
-                        description: `${albumData.title} adicionado aos downloads!`
-                    });
+                    setDownloadProgress(100);
+                    setDownloadStatus('completed');
 
                     return result;
                 }
@@ -571,6 +607,7 @@ const AlbumPage = () => {
 
         } catch (error) {
             console.error('Download error:', error);
+            setDownloadModalOpen(false);
             toast({
                 title: 'Erro no Download',
                 description: error?.message || 'Não foi possível baixar o arquivo',
@@ -1225,6 +1262,16 @@ const AlbumPage = () => {
               <Suspense fallback={<div className="max-w-7xl mx-auto px-4 mt-16 mb-16 py-8 text-center text-gray-500">Carregando comentários...</div>}>
                 <CommentSection albumId={album.id} artistId={album.artistId} />
               </Suspense>
+
+            {/* Download Progress Modal */}
+            <DownloadProgressModal
+              isOpen={downloadModalOpen}
+              status={downloadStatus}
+              progress={downloadProgress}
+              albumTitle={album?.title}
+              songCount={albumSongs.length}
+              onClose={() => setDownloadModalOpen(false)}
+            />
 
             </div>
             );
