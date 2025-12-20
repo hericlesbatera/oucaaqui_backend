@@ -8,4 +8,3 @@ mutagen==1.46.0
 rarfile==4.1
 httpx==0.27.2
 PyJWT==2.8.0
-zipstream-ng==1.8.0
