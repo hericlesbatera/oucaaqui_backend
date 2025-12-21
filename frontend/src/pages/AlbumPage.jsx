@@ -32,12 +32,12 @@ const AlbumPage = () => {
      const navigate = useNavigate();
      const { playSong, currentSong, isPlaying, togglePlay, setIsFullPlayerOpen } = usePlayer();
      const { user, isPremium } = useAuth();
-     const { downloadAlbum, downloadProgress, isAlbumDownloaded } = useCapacitorDownloads((downloadInfo) => {
+     const { downloadAlbum, downloadProgress: hookDownloadProgress, isAlbumDownloaded } = useCapacitorDownloads((downloadInfo) => {
         if (downloadInfo) {
             setCurrentDownloadSong(downloadInfo.song);
             setCurrentDownloadIndex(downloadInfo.index);
             const progress = (downloadInfo.index / downloadInfo.total) * 100;
-            setDownloadProgress(progress);
+            setLocalDownloadProgress(progress);
         }
      });
      const [isFavorite, setIsFavorite] = useState(false);
@@ -54,7 +54,7 @@ const AlbumPage = () => {
        const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
        const [downloadInProgress, setDownloadInProgress] = useState(false);
        const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed', 'error'
-       const [downloadProgress, setDownloadProgress] = useState(0);
+       const [localDownloadProgress, setLocalDownloadProgress] = useState(0);
        const [downloadModalOpen, setDownloadModalOpen] = useState(false);
        const [downloadErrorMessage, setDownloadErrorMessage] = useState('');
        const [currentDownloadSong, setCurrentDownloadSong] = useState('');
@@ -501,7 +501,7 @@ const AlbumPage = () => {
         setDownloadInProgress(true);
         setDownloadModalOpen(true);
         setDownloadStatus('preparing');
-        setDownloadProgress(0);
+        setLocalDownloadProgress(0);
         
         try {
             // Registrar download imediatamente
@@ -519,7 +519,7 @@ const AlbumPage = () => {
                     preparingProgress = 90;
                     clearInterval(preparingInterval);
                 }
-                setDownloadProgress(preparingProgress);
+                setLocalDownloadProgress(preparingProgress);
             }, 200);
 
             // Usar handleDownload para detectar plataforma
@@ -535,7 +535,7 @@ const AlbumPage = () => {
 
                     clearInterval(preparingInterval);
                     setDownloadStatus('downloading');
-                    setDownloadProgress(90);
+                    setLocalDownloadProgress(90);
 
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
@@ -565,7 +565,7 @@ const AlbumPage = () => {
                                 chunks.push(value);
                                 receivedLength += value.length;
                                 const progress = 90 + (receivedLength / contentLength) * 10;
-                                setDownloadProgress(Math.min(progress, 99));
+                                setLocalDownloadProgress(Math.min(progress, 99));
                             }
 
                             const blob = new Blob(chunks);
@@ -596,7 +596,7 @@ const AlbumPage = () => {
                             window.URL.revokeObjectURL(url);
                         }
 
-                        setDownloadProgress(100);
+                        setLocalDownloadProgress(100);
                         setDownloadStatus('completed');
                     } catch (fetchError) {
                         clearTimeout(timeoutId);
@@ -622,7 +622,7 @@ const AlbumPage = () => {
                                 method: 'GET'
                             });
                             console.log('ZIP baixado (mobile):', JSON.stringify(res));
-                            setDownloadProgress(100);
+                            setLocalDownloadProgress(100);
                             setDownloadStatus('completed');
                             return { zipPath: filePath };
                         } catch (zipErr) {
@@ -633,7 +633,7 @@ const AlbumPage = () => {
                     // Senão, baixar MP3s individuais
                     try {
                         const result = await downloadAlbum(albumData, songs);
-                        setDownloadProgress(100);
+                        setLocalDownloadProgress(100);
                         setDownloadStatus('completed');
                         return result;
                     } catch (error) {
@@ -964,14 +964,14 @@ const AlbumPage = () => {
                                      : 'bg-red-600 hover:bg-red-700'
                              }`}
                          >
-                             {downloadInProgress && album?.id && downloadProgress[album.id] ? (
+                             {downloadInProgress && album?.id && hookDownloadProgress[album.id] ? (
                                  <>
                                      <div className="absolute inset-0 bg-red-700 transition-all duration-300" 
-                                         style={{ width: `${(downloadProgress[album.id].current / downloadProgress[album.id].total) * 100}%` }}>
+                                         style={{ width: `${(hookDownloadProgress[album.id].current / hookDownloadProgress[album.id].total) * 100}%` }}>
                                      </div>
                                      <span className="relative inline-block animate-spin mr-2">⏳</span>
                                      <span className="relative">
-                                         BAIXANDO {downloadProgress[album.id].current}/{downloadProgress[album.id].total}...
+                                         BAIXANDO {hookDownloadProgress[album.id].current}/{hookDownloadProgress[album.id].total}...
                                      </span>
                                  </>
                              ) : downloadInProgress ? (
@@ -1116,10 +1116,10 @@ const AlbumPage = () => {
                                      : 'bg-red-600 hover:bg-red-700'
                              }`}
                          >
-                             {downloadInProgress && album?.id && downloadProgress[album.id] ? (
+                             {downloadInProgress && album?.id && hookDownloadProgress[album.id] ? (
                                  <>
                                      <span className="inline-block animate-spin mr-2">⏳</span>
-                                     BAIXANDO {downloadProgress[album.id].current}/{downloadProgress[album.id].total}...
+                                     BAIXANDO {hookDownloadProgress[album.id].current}/{hookDownloadProgress[album.id].total}...
                                  </>
                              ) : downloadInProgress ? (
                                  <>
@@ -1329,7 +1329,7 @@ const AlbumPage = () => {
             <DownloadProgressModal
               isOpen={downloadModalOpen}
               status={downloadStatus}
-              progress={downloadProgress}
+              progress={localDownloadProgress}
               albumTitle={album?.title}
               songCount={albumSongs.length}
               currentSong={currentDownloadSong}
@@ -1338,7 +1338,7 @@ const AlbumPage = () => {
               onClose={() => {
                 setDownloadModalOpen(false);
                 setDownloadStatus('preparing');
-                setDownloadProgress(0);
+                setLocalDownloadProgress(0);
                 setDownloadErrorMessage('');
                 setCurrentDownloadSong('');
                 setCurrentDownloadIndex(0);
