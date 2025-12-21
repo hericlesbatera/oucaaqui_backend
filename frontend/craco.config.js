@@ -40,9 +40,19 @@ const webpackConfig = {
     configure: (webpackConfig, { env }) => {
       // Remove react-refresh in production to fix "React Refresh runtime should not be included in the production bundle" error
       if (env === 'production') {
+        // Remove ReactRefreshPlugin
         webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
-          return plugin.constructor.name !== 'ReactRefreshPlugin';
+          const name = plugin.constructor.name;
+          return name !== 'ReactRefreshPlugin' && name !== 'ReactRefreshWebpackPlugin';
         });
+        
+        // Exclude react-refresh from the bundle entirely
+        webpackConfig.resolve = webpackConfig.resolve || {};
+        webpackConfig.resolve.alias = {
+          ...webpackConfig.resolve.alias,
+          'react-refresh/runtime': false,
+          'react-refresh': false,
+        };
       }
 
       // Disable hot reload completely if environment variable is set
