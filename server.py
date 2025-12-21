@@ -1,8 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pathlib import Path
 from routes.albums import router as albums_router
 from routes.album_upload import router as album_upload_router
 from routes.upload_progress import router as upload_progress_router
@@ -38,25 +35,3 @@ app.include_router(admin_router, prefix="/api")
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-# Serve static files from public directory (frontend build)
-public_path = Path(__file__).parent / "public"
-if public_path.exists():
-    # Servir arquivos CSS, JS, etc. com prefixo
-    app.mount("/static", StaticFiles(directory=str(public_path), check_dir=True), name="static")
-    
-    # Fallback route para React Router - deve ser a última rota
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        file_path = public_path / full_path
-        
-        # Se é um arquivo estático que existe, serve
-        if file_path.is_file():
-            return FileResponse(file_path)
-        
-        # Caso contrário, serve index.html (para React Router)
-        index_path = public_path / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path)
-        
-        return {"detail": "Not Found"}
