@@ -54,6 +54,7 @@ const AlbumPage = () => {
        const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
        const [downloadInProgress, setDownloadInProgress] = useState(false);
        const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed', 'error'
+       const [downloadProgress, setDownloadProgress] = useState(0);
        const [downloadModalOpen, setDownloadModalOpen] = useState(false);
        const [downloadErrorMessage, setDownloadErrorMessage] = useState('');
        const [currentDownloadSong, setCurrentDownloadSong] = useState('');
@@ -1336,10 +1337,11 @@ const AlbumPage = () => {
               errorMessage={downloadErrorMessage}
               onClose={() => {
                 setDownloadModalOpen(false);
-                    setDownloadStatus('preparing');
-                    setDownloadErrorMessage('');
-                    setCurrentDownloadSong('');
-                    setCurrentDownloadIndex(0);
+                setDownloadStatus('preparing');
+                setDownloadProgress(0);
+                setDownloadErrorMessage('');
+                setCurrentDownloadSong('');
+                setCurrentDownloadIndex(0);
               }}
             />
 

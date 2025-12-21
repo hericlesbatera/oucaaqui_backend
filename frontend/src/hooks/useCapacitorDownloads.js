@@ -4,40 +4,19 @@ import { Preferences } from '@capacitor/preferences';
 import { CapacitorHttp } from '@capacitor/core';
 import { Http } from '@capacitor-community/http';
 
-const DOWNLOADS_DIR = 'downloads';
-const METADATA_KEY = 'downloads_metadata';
-
-// Verificar se está em ambiente Capacitor mobile
-export const isCapacitorAvailable = () => {
-    if (typeof window === 'undefined') {
-        console.log('[Capacitor] window undefined');
-        return false;
-    }
-
-    const hasCapacitor = window.Capacitor !== undefined;
-    console.log('[Capacitor] hasCapacitor:', hasCapacitor);
-
-    if (!hasCapacitor) return false;
-
-    // Verificar se é função ou propriedade
+// Função utilitária para verificar se o Capacitor está disponível
+const isCapacitorAvailable = () => {
+    if (typeof window === 'undefined' || !window.Capacitor) return false;
     let isNative = false;
-
     if (typeof window.Capacitor.isNativePlatform === 'function') {
         isNative = window.Capacitor.isNativePlatform();
-        console.log('[Capacitor] isNativePlatform():', isNative);
     } else if (window.Capacitor.isNativePlatform === true) {
         isNative = true;
-        console.log('[Capacitor] isNativePlatform === true');
     }
-
     const platform = window.Capacitor.getPlatform?.();
-    console.log('[Capacitor] platform:', platform);
-
     if (platform === 'android' || platform === 'ios') {
         isNative = true;
     }
-
-    console.log('[Capacitor] isCapacitorAvailable RESULT:', isNative);
     return isNative;
 };
 
@@ -332,15 +311,15 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
         const debugLogs = [];
         const originalLog = console.log;
         const originalError = console.error;
-        
+
         const captureLog = (...args) => {
             originalLog(...args);
             debugLogs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
         };
-        
+
         console.log = captureLog;
         console.error = captureLog;
-        
+
         try {
             console.log('==========================================');
             console.log('🎵 INICIANDO DOWNLOAD DE ALBUM');
@@ -371,20 +350,20 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             const albumDir = sanitizePath(album.title);
             console.log('📁 Pasta do álbum:', albumDir);
             console.log('==========================================');
-            
+
             // Validar URLs antes de começar
             const songsWithValidURLs = songs.filter(song => {
                 const url = song?.audioUrl || song?.audio_url || song?.url;
                 return !!url;
             });
-            
+
             console.log(`📋 Músicas com URL válida: ${songsWithValidURLs.length}/${songs.length}`);
-            
+
             if (songsWithValidURLs.length === 0) {
                 console.error('❌ Nenhuma música possui URL de áudio válida!');
                 throw new Error(`Nenhuma música possui URL de áudio válida. Verifique se as músicas foram carregadas corretamente.`);
             }
-            
+
             const downloadedSongs = [];
             let successCount = 0;
             let failCount = 0;
@@ -418,6 +397,24 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
                     failCount++;
                     continue;
                 }
+
+                // ...existing code...
+            }
+
+            console.log('\n==========================================');
+            console.log(`📊 RESUMO DO DOWNLOAD`);
+            console.log(`   Sucesso: ${successCount}/${songsWithValidURLs.length}`);
+            console.log(`   Falha: ${failCount}/${songsWithValidURLs.length}`);
+            console.log(`   Último erro: ${lastError}`);
+            console.log('==========================================\n');
+
+            // ...existing code...
+        } catch (err) {
+            console.error('Erro durante o download do álbum:', err);
+        } finally {
+            console.log = originalLog;
+            console.error = originalError;
+        }
 
                 // Atualizar progresso APÓS sucesso (não por tentativa)
                 // Mantém contagem real de arquivos gravados
