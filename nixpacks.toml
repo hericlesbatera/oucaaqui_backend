@@ -1,11 +1,4 @@
-[phases.setup]
-nixPkgs = ["python311Full", "nodejs_20", "python311Packages.pip"]
-
-[phases.install]
-cmds = ["npm ci", "cd backend && python -m venv /app/venv && /app/venv/bin/pip install --upgrade pip && /app/venv/bin/pip install -r requirements.txt --no-cache-dir"]
-
-[phases.build]
-cmds = ["npm run build"]
-
-[start]
-cmd = "cd backend && /app/venv/bin/uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Este arquivo é mantido apenas para compatibilidade
+# O Railway deve usar o nixpacks.toml da pasta specific:
+# - frontend/nixpacks.toml para o serviço frontend
+# - backend/nixpacks.toml para o serviço backend
