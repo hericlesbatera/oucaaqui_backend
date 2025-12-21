@@ -40,19 +40,37 @@ const webpackConfig = {
     configure: (webpackConfig, { env }) => {
       // Remove react-refresh in production to fix "React Refresh runtime should not be included in the production bundle" error
       if (env === 'production') {
-        // Remove ReactRefreshPlugin
+        // Remove ReactRefreshPlugin from webpack plugins
         webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
           const name = plugin.constructor.name;
           return name !== 'ReactRefreshPlugin' && name !== 'ReactRefreshWebpackPlugin';
         });
         
-        // Exclude react-refresh from the bundle entirely
-        webpackConfig.resolve = webpackConfig.resolve || {};
-        webpackConfig.resolve.alias = {
-          ...webpackConfig.resolve.alias,
-          'react-refresh/runtime': false,
-          'react-refresh': false,
-        };
+        // Remove react-refresh/babel from babel-loader
+        webpackConfig.module.rules.forEach(rule => {
+          if (rule.oneOf) {
+            rule.oneOf.forEach(oneOfRule => {
+              if (oneOfRule.loader && oneOfRule.loader.includes('babel-loader')) {
+                if (oneOfRule.options && oneOfRule.options.plugins) {
+                  oneOfRule.options.plugins = oneOfRule.options.plugins.filter(
+                    plugin => !String(plugin).includes('react-refresh')
+                  );
+                }
+              }
+              if (oneOfRule.use) {
+                oneOfRule.use.forEach(useRule => {
+                  if (useRule.loader && useRule.loader.includes('babel-loader')) {
+                    if (useRule.options && useRule.options.plugins) {
+                      useRule.options.plugins = useRule.options.plugins.filter(
+                        plugin => !String(plugin).includes('react-refresh')
+                      );
+                    }
+                  }
+                });
+              }
+            });
+          }
+        });
       }
 
       // Disable hot reload completely if environment variable is set
