@@ -24,16 +24,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(albums_router)
-app.include_router(album_upload_router)
-app.include_router(upload_progress_router)
-app.include_router(artists_router)
-app.include_router(artist_videos_router)
-app.include_router(cleanup_router)
-app.include_router(music_files_router)
-app.include_router(album_download_router)
-app.include_router(admin_router)
+# Include routers with /api prefix
+app.include_router(albums_router, prefix="/api")
+app.include_router(album_upload_router, prefix="/api")
+app.include_router(upload_progress_router, prefix="/api")
+app.include_router(artists_router, prefix="/api")
+app.include_router(artist_videos_router, prefix="/api")
+app.include_router(cleanup_router, prefix="/api")
+app.include_router(music_files_router, prefix="/api")
+app.include_router(album_download_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 @app.get("/health")
 def health_check():
@@ -42,6 +42,9 @@ def health_check():
 # Serve static files from public directory (frontend build)
 public_path = Path(__file__).parent / "public"
 if public_path.exists():
+    # Servir arquivos CSS, JS, etc. com prefixo
+    app.mount("/static", StaticFiles(directory=str(public_path), check_dir=True), name="static")
+    
     # Fallback route para React Router - deve ser a última rota
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
@@ -57,6 +60,3 @@ if public_path.exists():
             return FileResponse(index_path)
         
         return {"detail": "Not Found"}
-    
-    # Servir arquivos CSS, JS, etc.
-    app.mount("/", StaticFiles(directory=str(public_path), check_dir=True), name="static")
