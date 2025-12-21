@@ -41,15 +41,5 @@ def health_check():
 
 # Serve static files from public directory (frontend build)
 public_path = Path(__file__).parent / "public"
-
-# Catch-all route para SPA - serve index.html para rotas desconhecidas (ANTES de StaticFiles)
-@app.get("/{path_name:path}")
-async def serve_spa(path_name: str):
-    index_path = public_path / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return {"detail": "Not Found"}
-
-# Mount static files DEPOIS do catch-all
 if public_path.exists():
     app.mount("/", StaticFiles(directory=str(public_path), html=True), name="static")
