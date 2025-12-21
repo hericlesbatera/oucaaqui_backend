@@ -37,7 +37,13 @@ const webpackConfig = {
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env }) => {
+      // Remove react-refresh in production to fix "React Refresh runtime should not be included in the production bundle" error
+      if (env === 'production') {
+        webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
+          return plugin.constructor.name !== 'ReactRefreshPlugin';
+        });
+      }
 
       // Disable hot reload completely if environment variable is set
       if (config.disableHotReload) {
