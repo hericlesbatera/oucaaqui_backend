@@ -8,7 +8,7 @@ const DOWNLOADS_DIR = 'music_downloads';
 const METADATA_KEY = 'downloaded_albums';
 
 // Função utilitária para verificar se o Capacitor está disponível
-const isCapacitorAvailable = () => {
+export const isCapacitorAvailable = () => {
     if (typeof window === 'undefined' || !window.Capacitor) return false;
     let isNative = false;
     if (typeof window.Capacitor.isNativePlatform === 'function') {
