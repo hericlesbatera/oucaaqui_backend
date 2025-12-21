@@ -54,7 +54,6 @@ const AlbumPage = () => {
        const [currentSongFavorite, setCurrentSongFavorite] = useState(false);
        const [downloadInProgress, setDownloadInProgress] = useState(false);
        const [downloadStatus, setDownloadStatus] = useState('preparing'); // 'preparing', 'downloading', 'completed', 'error'
-       const [downloadProgress, setDownloadProgress] = useState(0);
        const [downloadModalOpen, setDownloadModalOpen] = useState(false);
        const [downloadErrorMessage, setDownloadErrorMessage] = useState('');
        const [currentDownloadSong, setCurrentDownloadSong] = useState('');
@@ -631,13 +630,6 @@ const AlbumPage = () => {
                     }
 
                     // Senão, baixar MP3s individuais
-                    // DEBUG: mostrar URLs
-                    console.log('=== DEBUG URLs ===');
-                    songs.forEach((s, i) => {
-                        console.log(`${i+1}. ${s.title}: ${s.audioUrl || s.audio_url || 'SEM URL'}`);
-                    });
-                    console.log('=================');
-                    
                     try {
                         const result = await downloadAlbum(albumData, songs);
                         setDownloadProgress(100);
@@ -1344,11 +1336,10 @@ const AlbumPage = () => {
               errorMessage={downloadErrorMessage}
               onClose={() => {
                 setDownloadModalOpen(false);
-                setDownloadStatus('preparing');
-                setDownloadProgress(0);
-                setDownloadErrorMessage('');
-                setCurrentDownloadSong('');
-                setCurrentDownloadIndex(0);
+                    setDownloadStatus('preparing');
+                    setDownloadErrorMessage('');
+                    setCurrentDownloadSong('');
+                    setCurrentDownloadIndex(0);
               }}
             />
 

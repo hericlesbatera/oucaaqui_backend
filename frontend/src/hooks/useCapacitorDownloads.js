@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Filesystem, Directory, FilesystemDirectory, Encoding } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
+import { CapacitorHttp } from '@capacitor/core';
+import { Http } from '@capacitor-community/http';
 
 const DOWNLOADS_DIR = 'downloads';
 const METADATA_KEY = 'downloads_metadata';
@@ -86,45 +88,75 @@ const downloadFile = async (url, fileName, albumDir) => {
         console.log(`🌐 Iniciando download: ${fileName}`);
         console.log(`   URL: ${url}`);
 
-        // Usar fetch com timeout de 2 minutos
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000);
-        
+        // Tentar baixar diretamente com Http.downloadFile (escreve no disco sem converter)
+        try {
+            const albumPath = `${DOWNLOADS_DIR}/${albumDir}`;
+            try { await Filesystem.mkdir({ path: albumPath, directory: Directory.Data, recursive: true }); } catch {}
+            const filePath = `${albumPath}/${fileName}`;
+            console.log(`   Usando Http.downloadFile -> ${filePath}`);
+            const res = await Http.downloadFile({
+                url,
+                filePath,
+                fileDirectory: FilesystemDirectory.Data,
+                method: 'GET'
+            });
+            console.log(`   ✅ Http.downloadFile OK: ${JSON.stringify(res)}`);
+            return true;
+        } catch (httpErr) {
+            console.warn(`   Http.downloadFile falhou: ${httpErr.message}. Fallback para CapacitorHttp...`);
+        }
+
+        // Usar CapacitorHttp nativo (ignora CORS)
         let base64Data;
         
         try {
-            const response = await fetch(url, {
-                method: 'GET',
-                signal: controller.signal
+            console.log(`   Usando CapacitorHttp (nativo)...`);
+            const response = await CapacitorHttp.get({
+                url: url,
+                responseType: 'blob',
+                headers: {
+                    'Accept': 'audio/mpeg,audio/*,*/*'
+                }
             });
-            clearTimeout(timeoutId);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+            if (response.status !== 200) {
+                throw new Error(`HTTP ${response.status}`);
             }
             
-            const blob = await response.blob();
-            console.log(`   Blob recebido: ${blob.size} bytes, type: ${blob.type}`);
+            // CapacitorHttp retorna data como base64 quando responseType é blob
+            base64Data = response.data;
+            console.log(`   ✅ CapacitorHttp OK - ${(base64Data?.length || 0)} chars`);
             
-            if (blob.size === 0) {
-                throw new Error('Arquivo vazio (0 bytes)');
+        } catch (nativeError) {
+            console.warn(`   CapacitorHttp falhou: ${nativeError.message}, tentando fetch...`);
+            
+            // Fallback para fetch normal
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000);
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                if (blob.size === 0) {
+                    throw new Error('Arquivo vazio');
+                }
+                
+                base64Data = await blobToBase64(blob);
+                console.log(`   ✅ Fetch OK - ${blob.size} bytes`);
+                
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw new Error(`Download falhou: ${fetchError.message}`);
             }
-            
-            if (blob.size < 1000) {
-                // Muito pequeno para ser uma música, pode ser erro HTML
-                const text = await blob.text();
-                throw new Error(`Resposta inválida: ${text.substring(0, 100)}`);
-            }
-            
-            base64Data = await blobToBase64(blob);
-            console.log(`   ✅ Download OK - ${blob.size} bytes`);
-            
-        } catch (fetchError) {
-            clearTimeout(timeoutId);
-            if (fetchError.name === 'AbortError') {
-                throw new Error('Timeout - conexão muito lenta');
-            }
-            throw new Error(`${fetchError.message}`);
         }
 
         // Remove o prefixo data:audio/mpeg;base64, se existir
@@ -321,22 +353,21 @@ export const useCapacitorDownloads = (onSongDownloadStart) => {
             console.log('Número de músicas:', songs?.length);
             console.log('Capacitor disponível:', isCapacitorAvailable());
 
-        if (!isCapacitorAvailable()) {
-            console.error('❌ Capacitor não disponível! Abortando download.');
-            throw new Error('Capacitor não disponível para download de arquivo');
-        }
+            if (!isCapacitorAvailable()) {
+                console.error('❌ Capacitor não disponível! Abortando download.');
+                throw new Error('Capacitor não disponível para download de arquivo');
+            }
 
-        if (!album || !album.id || !album.title) {
-            console.error('❌ Album inválido:', album);
-            throw new Error('Dados do álbum inválidos');
-        }
+            if (!album || !album.id || !album.title) {
+                console.error('❌ Album inválido:', album);
+                throw new Error('Dados do álbum inválidos');
+            }
 
-        if (!songs || songs.length === 0) {
-            console.error('❌ Nenhuma música para baixar');
-            throw new Error('Album sem músicas');
-        }
+            if (!songs || songs.length === 0) {
+                console.error('❌ Nenhuma música para baixar');
+                throw new Error('Album sem músicas');
+            }
 
-        try {
             const albumDir = sanitizePath(album.title);
             console.log('📁 Pasta do álbum:', albumDir);
             console.log('==========================================');
