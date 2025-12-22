@@ -191,7 +191,8 @@ async def download_album(album_id: str):
             media_type="application/zip",
             headers={
                 "Content-Disposition": f'attachment; filename="{album_title}.zip"',
-                "Transfer-Encoding": "chunked"
+                "Transfer-Encoding": "chunked",
+                "Cache-Control": "no-store"
             }
         )
     
