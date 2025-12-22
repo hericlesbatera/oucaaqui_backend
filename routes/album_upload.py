@@ -435,7 +435,7 @@ async def upload_album(request: Request):
                             progress_module.update_progress(upload_id, song_progress, f"enviando_musica_{idx}_tentativa_{attempt+1}")
                             await asyncio.sleep(0.05)
                             async with httpx.AsyncClient(timeout=120.0) as client:
-                                         upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{storage_path}"
+                                upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{storage_path}"
                                 headers = {
                                     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                                     "Content-Type": "audio/mpeg"
