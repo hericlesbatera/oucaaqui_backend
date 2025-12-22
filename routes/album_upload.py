@@ -16,6 +16,7 @@ import rarfile
 import httpx
 from io import BytesIO
 from . import upload_progress as progress_module
+from . import auth_utils
 
 load_dotenv()
 
@@ -317,24 +318,8 @@ async def upload_album(request: Request):
             print(f"[UPLOAD] Inserting album into database...")
             print(f"[UPLOAD] Album data: {album_data}")
             try:
-                # First, ensure artist exists in artists table
-                print(f"[UPLOAD] Ensuring artist exists: {user_id}")
-                try:
-                    artist_check = supabase.table("artists").select("id").eq("id", user_id).execute()
-                    if not artist_check.data or len(artist_check.data) == 0:
-                        print(f"[UPLOAD] Artist not found, creating new artist record...")
-                        artist_data = {
-                            "id": user_id,
-                            "name": artist_name or "Artista",
-                            "created_at": None  # Let database set this
-                        }
-                        artist_response = supabase.table("artists").insert(artist_data).execute()
-                        print(f"[UPLOAD] Artist created: {artist_response.data}")
-                    else:
-                        print(f"[UPLOAD] Artist already exists")
-                except Exception as artist_err:
-                    print(f"[UPLOAD] Warning: Could not create artist record: {artist_err}")
-                    # Continue anyway, the foreign key constraint might not exist
+                # Ensure artist exists before creating album
+                await auth_utils.ensure_artist_exists(user_id, artist_name)
                 
                 album_response = supabase.table("albums").insert(album_data).execute()
                 
