@@ -306,7 +306,7 @@ async def upload_album(request: Request):
                 "artist_id": user_id,
                 "artist_name": artist_name,
                 "cover_url": None,  # Will be updated after cover upload
-                "is_private": False if should_publish_now else (is_scheduled or (not is_public)),  # Público se should_publish_now, senão segue a regra normal
+                "is_private": not is_public,  # Privado se is_public=false, público se is_public=true
                 "is_scheduled": True if is_scheduled else False,  # Explicitly ensure boolean
                 "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,  # Limpar se não é mais agendado
                 "release_date": release_date,  # Salvar a data completa
