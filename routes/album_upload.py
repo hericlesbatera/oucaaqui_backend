@@ -319,7 +319,15 @@ async def upload_album(request: Request):
             print(f"[UPLOAD] Album data: {album_data}")
             try:
                 # Ensure artist exists before creating album
-                auth_utils.ensure_artist_exists(user_id, artist_name)
+                artist_created = auth_utils.ensure_artist_exists(user_id, artist_name)
+                print(f"[UPLOAD] Artist creation result: {artist_created}")
+                
+                # Verify artist exists before proceeding
+                artist_verify = supabase.table("artists").select("id, name").eq("id", user_id).execute()
+                print(f"[UPLOAD] Artist verification: {artist_verify.data}")
+                
+                if not artist_verify.data or len(artist_verify.data) == 0:
+                    print(f"[UPLOAD] WARNING: Artist {user_id} still not found after creation attempt")
                 
                 album_response = supabase.table("albums").insert(album_data).execute()
                 
