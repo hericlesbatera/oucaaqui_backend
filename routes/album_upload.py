@@ -496,7 +496,11 @@ async def upload_album(request: Request):
                         songs_created.append(song_response.data[0])
                         print(f"[UPLOAD] Song {idx} created with ID: {song_response.data[0].get('id')}")
                     else:
-                        print(f"[UPLOAD] Warning: Song {idx} response had no data: {song_response}")
+                        print(f"[UPLOAD] Warning: Song {idx} response had no data")
+                        print(f"[UPLOAD] Response object: {song_response}")
+                        print(f"[UPLOAD] Response attributes: {dir(song_response)}")
+                        if hasattr(song_response, 'error'):
+                            print(f"[UPLOAD] Response error: {song_response.error}")
                     
                     # Update progress after recording
                     progress_module.update_progress(upload_id, song_progress + 2, f"musica_{idx}_registrada")
@@ -507,6 +511,7 @@ async def upload_album(request: Request):
                 except Exception as e:
                     import traceback
                     print(f"[UPLOAD] Error uploading song {idx}: {e}")
+                    print(f"[UPLOAD] Error type: {type(e)}")
                     print(f"[UPLOAD] Traceback: {traceback.format_exc()}")
                     continue
             
