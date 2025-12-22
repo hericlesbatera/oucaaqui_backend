@@ -88,6 +88,12 @@ async def upload_album(request: Request):
         cover_image_file = form_data.get("coverImage")
         album_file = form_data.get("albumFile")
         
+        print(f"[UPLOAD] coverImage received: {cover_image_file}")
+        print(f"[UPLOAD] coverImage type: {type(cover_image_file)}")
+        if cover_image_file:
+            print(f"[UPLOAD] coverImage filename: {getattr(cover_image_file, 'filename', 'N/A')}")
+            print(f"[UPLOAD] coverImage content_type: {getattr(cover_image_file, 'content_type', 'N/A')}")
+        
         if not album_file:
             raise HTTPException(status_code=400, detail="albumFile is required")
         
@@ -246,9 +252,42 @@ async def upload_album(request: Request):
                 try:
                     cover_data = await cover_image_file.read()
                     cover_file_ext = cover_image_file.filename.lower().split('.')[-1]
-                    print(f"[UPLOAD] Cover image read: {len(cover_data)} bytes")
+                    print(f"[UPLOAD] Cover image read from form: {len(cover_data)} bytes")
                 except Exception as e:
-                    print(f"[UPLOAD] Error reading cover: {e}")
+                    print(f"[UPLOAD] Error reading cover from form: {e}")
+            
+            # Fallback: try to find cover image inside the extracted archive
+            if not cover_data:
+                print(f"[UPLOAD] No cover from form, searching in archive...")
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+                cover_names = ['cover', 'capa', 'folder', 'front', 'artwork', 'album']
+                
+                for file_path in all_files:
+                    if file_path.is_file() and file_path.suffix.lower() in image_extensions:
+                        file_name_lower = file_path.stem.lower()
+                        # Check if filename matches common cover names
+                        if any(name in file_name_lower for name in cover_names):
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    cover_data = f.read()
+                                cover_file_ext = file_path.suffix.lower().lstrip('.')
+                                print(f"[UPLOAD] Cover found in archive: {file_path.name} ({len(cover_data)} bytes)")
+                                break
+                            except Exception as e:
+                                print(f"[UPLOAD] Error reading cover from archive: {e}")
+                
+                # If still no cover, use the first image found
+                if not cover_data:
+                    for file_path in all_files:
+                        if file_path.is_file() and file_path.suffix.lower() in image_extensions:
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    cover_data = f.read()
+                                cover_file_ext = file_path.suffix.lower().lstrip('.')
+                                print(f"[UPLOAD] Using first image as cover: {file_path.name} ({len(cover_data)} bytes)")
+                                break
+                            except Exception as e:
+                                print(f"[UPLOAD] Error reading image: {e}")
             
             # Create album record in Supabase
             # Generate unique slug: if custom_url provided use it, otherwise use title + full uuid
