@@ -316,13 +316,20 @@ async def upload_album(request: Request):
             progress_module.update_progress(upload_id, 80, "criando_album")
             print(f"[UPLOAD] Inserting album into database...")
             print(f"[UPLOAD] Album data: {album_data}")
-            album_response = supabase.table("albums").insert(album_data).execute()
-            
-            print(f"[UPLOAD] Album response: {album_response}")
-            print(f"[UPLOAD] Album response data: {album_response.data if hasattr(album_response, 'data') else 'No data attribute'}")
-            
-            if not hasattr(album_response, 'data') or not album_response.data or len(album_response.data) == 0:
-                raise HTTPException(status_code=500, detail="Failed to create album in database")
+            try:
+                album_response = supabase.table("albums").insert(album_data).execute()
+                
+                print(f"[UPLOAD] Album response: {album_response}")
+                print(f"[UPLOAD] Album response data: {album_response.data if hasattr(album_response, 'data') else 'No data attribute'}")
+                
+                if not hasattr(album_response, 'data') or not album_response.data or len(album_response.data) == 0:
+                    raise Exception("No data returned from album insertion")
+            except Exception as db_error:
+                print(f"[UPLOAD] Database insertion error: {db_error}")
+                print(f"[UPLOAD] Error type: {type(db_error)}")
+                import traceback
+                print(f"[UPLOAD] Traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=f"Failed to create album in database: {str(db_error)}")
             
             album_record = album_response.data[0]
             album_id = album_record.get("id") if isinstance(album_record, dict) else None
