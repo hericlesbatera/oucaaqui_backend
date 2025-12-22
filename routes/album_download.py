@@ -39,7 +39,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-router = APIRouter(prefix="/api/albums", tags=["album_download"])
+router = APIRouter(prefix="/albums", tags=["album_download"])
 
 
 async def download_single_song(client, song, idx):
