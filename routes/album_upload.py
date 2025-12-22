@@ -482,7 +482,15 @@ async def upload_album(request: Request):
                     }
                     
                     print(f"[UPLOAD] Inserting song record: {song_data}")
-                    song_response = supabase.table("songs").insert(song_data).execute()
+                    try:
+                        song_response = supabase.table("songs").insert(song_data).execute()
+                        print(f"[UPLOAD] Song insertion response: {song_response}")
+                        if hasattr(song_response, 'data') and song_response.data:
+                            print(f"[UPLOAD] Song data returned: {song_response.data}")
+                    except Exception as song_err:
+                        print(f"[UPLOAD] Error inserting song: {song_err}")
+                        print(f"[UPLOAD] Song error traceback: {traceback.format_exc()}")
+                        raise
                     
                     if hasattr(song_response, 'data') and song_response.data and len(song_response.data) > 0:
                         songs_created.append(song_response.data[0])
