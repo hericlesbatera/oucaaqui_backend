@@ -251,13 +251,13 @@ async def upload_album(request: Request):
                     print(f"[UPLOAD] Error reading cover: {e}")
             
             # Create album record in Supabase
-            # Generate unique slug: if custom_url provided use it, otherwise use title + uuid suffix
+            # Generate unique slug: if custom_url provided use it, otherwise use title + full uuid
             if custom_url:
                 album_slug = custom_url
             else:
-                base_slug = title.lower().replace(" ", "-").replace(".", "").replace(",", "")[:50]
-                # Add short uuid to ensure uniqueness
-                slug_suffix = str(uuid.uuid4())[:8]
+                base_slug = title.lower().replace(" ", "-").replace(".", "").replace(",", "")[:30]
+                # Add full uuid to ensure uniqueness
+                slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
                 album_slug = f"{base_slug}-{slug_suffix}"
             
             # Handle scheduled publishing
@@ -372,7 +372,7 @@ async def upload_album(request: Request):
                     
                     # Use httpx directly with proper headers
                     async with httpx.AsyncClient() as client:
-                        upload_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
+                        upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
                         headers = {
                             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                             "Content-Type": mime_type
@@ -428,14 +428,14 @@ async def upload_album(request: Request):
                     
                     # Use httpx directly with proper headers for MP3 - with retry logic
                     upload_success = False
-                    max_retries = 3
+                    max_retries = 5
                     
                     for attempt in range(max_retries):
                         try:
                             progress_module.update_progress(upload_id, song_progress, f"enviando_musica_{idx}_tentativa_{attempt+1}")
                             await asyncio.sleep(0.05)
-                            async with httpx.AsyncClient(timeout=60.0) as client:
-                                upload_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{storage_path}"
+                            async with httpx.AsyncClient(timeout=120.0) as client:
+                                         upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{storage_path}"
                                 headers = {
                                     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
                                     "Content-Type": "audio/mpeg"
@@ -478,7 +478,12 @@ async def upload_album(request: Request):
                         "audio_url": audio_url,
                         "cover_url": cover_url,
                         "duration": 0,  # TODO: Extract duration from MP3
-                        "track_number": idx
+                        "track_number": idx,
+                        "genre": genre if genre else None,
+                        "language": "pt-BR",
+                        "explicit_content": False,
+                        "release_year": release_date[:4] if release_date else None,
+                        "release_date": release_date
                     }
                     
                     print(f"[UPLOAD] Inserting song record: {song_data}")
