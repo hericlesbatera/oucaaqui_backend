@@ -182,7 +182,7 @@ async def download_album(album_id: str):
         logger.info(f"⏱️  Archive não existe, gerando em tempo real...")
         
         # Buscar todas as musicas do album
-        songs_result = supabase.table("songs").select("id, title, audio_url, track_number").eq("album_id", album_id).order("track_number", desc=False).execute()
+        songs_result = supabase.table("songs").select("id, title, file_url, audio_url, url, track_number").eq("album_id", album_id).order("track_number", desc=False).execute()
         
         songs = songs_result.data if songs_result.data else []
         
