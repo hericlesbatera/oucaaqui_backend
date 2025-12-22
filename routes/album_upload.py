@@ -319,7 +319,7 @@ async def upload_album(request: Request):
             print(f"[UPLOAD] Album data: {album_data}")
             try:
                 # Ensure artist exists before creating album
-                await auth_utils.ensure_artist_exists(user_id, artist_name)
+                auth_utils.ensure_artist_exists(user_id, artist_name)
                 
                 album_response = supabase.table("albums").insert(album_data).execute()
                 

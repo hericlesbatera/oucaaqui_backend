@@ -14,7 +14,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
-async def ensure_artist_exists(user_id: str, artist_name: str = None) -> bool:
+def ensure_artist_exists(user_id: str, artist_name: str = None) -> bool:
     """
     Ensure an artist record exists for the given user_id.
     Creates one if it doesn't exist.
@@ -28,6 +28,7 @@ async def ensure_artist_exists(user_id: str, artist_name: str = None) -> bool:
     """
     try:
         # Check if artist already exists
+        print(f"[AUTH] Checking if artist exists: {user_id}")
         artist_check = supabase.table("artists").select("id").eq("id", user_id).execute()
         
         if artist_check.data and len(artist_check.data) > 0:
@@ -40,8 +41,11 @@ async def ensure_artist_exists(user_id: str, artist_name: str = None) -> bool:
             "id": user_id,
             "name": artist_name or "Artista",
         }
+        print(f"[AUTH] Artist data to insert: {artist_data}")
         
         artist_response = supabase.table("artists").insert(artist_data).execute()
+        print(f"[AUTH] Artist response: {artist_response}")
+        print(f"[AUTH] Artist response data: {artist_response.data if hasattr(artist_response, 'data') else 'No data'}")
         
         if artist_response.data and len(artist_response.data) > 0:
             print(f"[AUTH] Artist created successfully: {user_id}")
@@ -52,4 +56,6 @@ async def ensure_artist_exists(user_id: str, artist_name: str = None) -> bool:
             
     except Exception as e:
         print(f"[AUTH] Error ensuring artist exists: {e}")
+        import traceback
+        print(f"[AUTH] Traceback: {traceback.format_exc()}")
         return False
