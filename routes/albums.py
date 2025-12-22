@@ -18,7 +18,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-router = APIRouter(prefix="/api/albums", tags=["albums"])
+router = APIRouter(prefix="/albums", tags=["albums"])
 
 @router.get("")
 async def list_albums():

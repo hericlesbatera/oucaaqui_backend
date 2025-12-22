@@ -4,7 +4,7 @@ import subprocess
 import sys
 import threading
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Controlar se está executando
 is_generating = False

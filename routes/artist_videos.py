@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(prefix="/api/artist-videos", tags=["artist-videos"])
+router = APIRouter(prefix="/artist-videos", tags=["artist-videos"])
 
 class AddVideoRequest(BaseModel):
     album_id: str

@@ -26,7 +26,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-router = APIRouter(prefix="/api/cleanup", tags=["cleanup"])
+router = APIRouter(prefix="/cleanup", tags=["cleanup"])
 
 
 @router.post("/auto-delete-old-albums")

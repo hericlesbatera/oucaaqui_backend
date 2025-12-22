@@ -28,7 +28,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-router = APIRouter(prefix="/api/album-upload", tags=["album-upload"])
+router = APIRouter(prefix="/album-upload", tags=["album-upload"])
 
 # Global state for upload progress tracking
 upload_progress = {}

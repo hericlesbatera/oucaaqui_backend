@@ -16,7 +16,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-router = APIRouter(prefix="/api/music", tags=["music_files"])
+router = APIRouter(prefix="/music", tags=["music_files"])
 
 
 @router.get("/{song_id}/file")

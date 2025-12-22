@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Optional
 
-router = APIRouter(prefix="/api/artists", tags=["artists"])
+router = APIRouter(prefix="/artists", tags=["artists"])
 
 @router.get("/search")
 async def search_artists(q: str = Query(..., min_length=1)):

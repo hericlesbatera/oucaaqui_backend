@@ -5,7 +5,7 @@ import json
 from typing import Optional
 from datetime import datetime, timedelta
 
-router = APIRouter(prefix="/api/upload-progress", tags=["upload-progress"])
+router = APIRouter(prefix="/upload-progress", tags=["upload-progress"])
 
 # Global state for tracking uploads
 # Format: {upload_id: {"progress": 0-100, "step": "...", "start_time": datetime}}
