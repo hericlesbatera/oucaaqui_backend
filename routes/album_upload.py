@@ -297,6 +297,11 @@ async def upload_album(request: Request):
                     scheduled_publish_at = f"{schedule_date}T{schedule_time}:00Z"
                     print(f"[UPLOAD] Album scheduled for (fallback): {scheduled_publish_at}")
             
+            from datetime import datetime, timezone
+            published_at = None
+            if not is_scheduled:
+                # Publicação imediata: published_at = agora
+                published_at = datetime.now(timezone.utc).isoformat()
             album_data = {
                 "title": title,
                 "description": description,
@@ -309,6 +314,7 @@ async def upload_album(request: Request):
                 "is_private": not is_public,  # Privado se is_public=false, público se is_public=true
                 "is_scheduled": True if is_scheduled else False,  # Explicitly ensure boolean
                 "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,  # Limpar se não é mais agendado
+                "published_at": published_at,
                 "release_date": release_date,  # Salvar a data completa
                 "release_year": release_date[:4] if release_date else None
             }
