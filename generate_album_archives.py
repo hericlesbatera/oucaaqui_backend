@@ -30,7 +30,7 @@ def get_albums_without_archive():
 
 def get_album_songs(album_id):
     try:
-        response = supabase.table('songs').select('id, title, audio_url, track_number').eq('album_id', album_id).order('track_number', desc=False).execute()
+        response = supabase.table('songs').select('id, title, audio_url, file_url, url, track_number').eq('album_id', album_id).order('track_number', desc=False).execute()
         return response.data if response.data else []
     except Exception as e:
         print(f"Erro ao buscar musicas: {str(e)}")
@@ -48,10 +48,17 @@ def create_album_zip(album_id, album_title, songs):
             with httpx.Client(timeout=60.0) as client:
                 for idx, song in enumerate(songs, 1):
                     try:
-                        if song.get('audio_url'):
+                        # Tentar múltiplas URLs (file_url é a preferida, depois audio_url, depois url)
+                        song_url = song.get('file_url') or song.get('audio_url') or song.get('url')
+                        
+                        if song_url:
+                            # Se a URL é relativa, construir a URL completa do Supabase Storage
+                            if not song_url.startswith("http"):
+                                song_url = f"{SUPABASE_URL}/storage/v1/object/public/{song_url}"
+                            
                             title = song.get('title', f'track_{idx}')[:40]
                             print(f"    Baixando: {title}", end=' ... ', flush=True)
-                            response = client.get(song['audio_url'], follow_redirects=True)
+                            response = client.get(song_url, follow_redirects=True)
                             if response.status_code == 200:
                                 track_num = song.get('track_number', 0)
                                 filename = f"{track_num:02d} - {song.get('title', 'track')}.mp3"
@@ -60,6 +67,10 @@ def create_album_zip(album_id, album_title, songs):
                                 print(f"[OK - {size_kb}KB]")
                             else:
                                 print(f"[{response.status_code}]")
+                        else:
+                            title = song.get('title', f'track_{idx}')[:40]
+                            print(f"    {title}", end=' ... ', flush=True)
+                            print("[SEM URL]")
                     except httpx.TimeoutException:
                         print("[TIMEOUT]")
                     except Exception as e:

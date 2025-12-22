@@ -46,11 +46,17 @@ async def download_single_song(client, song, idx):
     """Baixa uma única música e retorna os dados."""
     import time
     
-    audio_url = song.get('audio_url')
+    # Tentar múltiplas URLs (file_url é a preferida, depois audio_url, depois url)
+    audio_url = song.get('file_url') or song.get('audio_url') or song.get('url')
     title = song.get('title', f'track_{idx}')[:50]
     
     if not audio_url:
+        logger.warning(f"⚠️  Nenhuma URL encontrada para: {title}")
         return None
+    
+    # Se a URL é relativa, construir a URL completa do Supabase Storage
+    if not audio_url.startswith("http"):
+        audio_url = f"{SUPABASE_URL}/storage/v1/object/public/{audio_url}"
     
     try:
         start_time = time.time()
@@ -176,7 +182,7 @@ async def download_album(album_id: str):
         logger.info(f"⏱️  Archive não existe, gerando em tempo real...")
         
         # Buscar todas as musicas do album
-        songs_result = supabase.table("songs").select("id, title, audio_url, track_number").eq("album_id", album_id).order("track_number", desc=False).execute()
+        songs_result = supabase.table("songs").select("id, title, audio_url, file_url, url, track_number").eq("album_id", album_id).order("track_number", desc=False).execute()
         
         songs = songs_result.data if songs_result.data else []
         
