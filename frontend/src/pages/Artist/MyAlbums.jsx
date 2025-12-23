@@ -26,8 +26,8 @@ import React, {useState, useEffect, useRef} from 'react';
         AlertDialogHeader,
         AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
-    import ArtistSidebar from '../../components/Artist/ArtistSidebar';
     import {toast} from '../../hooks/use-toast';
+    import LoadingSpinner from '../../components/LoadingSpinner';
 
 const MyAlbums = () => {
     const {user} = useAuth();
