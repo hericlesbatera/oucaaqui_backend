@@ -523,16 +523,20 @@ const AlbumPage = () => {
             }
             setAlbum(prev => prev ? { ...prev, download_count: (prev.download_count || 0) + 1 } : prev);
 
-            // Simular progresso de preparação
+            // Progresso de preparação mais gradual e realista
             let preparingProgress = 0;
             const preparingInterval = setInterval(() => {
-                preparingProgress += Math.random() * 30;
-                if (preparingProgress >= 90) {
-                    preparingProgress = 90;
+                // Incremento menor e mais gradual (máximo 5% por vez)
+                const increment = Math.random() * 3 + 1; // Entre 1% e 4%
+                preparingProgress += increment;
+                
+                // Limitar a 30% durante preparação (o resto vem do download real)
+                if (preparingProgress >= 30) {
+                    preparingProgress = 30;
                     clearInterval(preparingInterval);
                 }
                 setLocalDownloadProgress(preparingProgress);
-            }, 200);
+            }, 300);
 
             // Usar handleDownload para detectar plataforma
             await handleDownload({
@@ -548,7 +552,7 @@ const AlbumPage = () => {
 
                     clearInterval(preparingInterval);
                     setDownloadStatus('downloading');
-                    setLocalDownloadProgress(90);
+                    setLocalDownloadProgress(35); // Começar de 35% após preparação
 
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 300000);
@@ -610,6 +614,7 @@ const AlbumPage = () => {
 
                         setLocalDownloadProgress(100);
                         setDownloadStatus('completed');
+                        setDownloadInProgress(false); // Reset ao completar
                     } catch (fetchError) {
                         clearTimeout(timeoutId);
                         throw fetchError;
