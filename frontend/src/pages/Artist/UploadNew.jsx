@@ -1839,7 +1839,6 @@ const UploadNew = () => {
                     )}
                 </div>
             </div>
-        </div>
     );
 };
 
