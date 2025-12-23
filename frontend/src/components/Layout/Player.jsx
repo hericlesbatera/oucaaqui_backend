@@ -69,8 +69,12 @@ const Player = () => {
         
         // Apenas abrir automaticamente em mobile, quando houver mudança de música
         if (isPlaying && window.innerWidth < 768 && !userClosedPlayerRef.current && !isClosingPlayer) {
-            setMobilePlayerOpen(true);
-            userClosedPlayerRef.current = false;
+            // Usar setTimeout para evitar setState síncrono no useEffect
+            const timeout = setTimeout(() => {
+                setMobilePlayerOpen(true);
+                userClosedPlayerRef.current = false;
+            }, 0);
+            return () => clearTimeout(timeout);
         }
         
         // Ouvir evento customizado para forçar abrir
@@ -82,6 +86,7 @@ const Player = () => {
         };
         window.addEventListener('openMobilePlayer', handler);
         return () => window.removeEventListener('openMobilePlayer', handler);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentSong?.id, isClosingPlayer]);
 
     if (!currentSong) return null;
