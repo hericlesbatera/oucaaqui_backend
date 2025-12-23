@@ -144,7 +144,7 @@ ${document.querySelector('[data-debug-logs]')?.innerText || 'Nenhum log'}
           <div className="mb-4">
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
               <div
-                className="bg-blue-500 h-full transition-all duration-300"
+                className="bg-red-500 h-full transition-all duration-300"
                 style={{ width: `${animatedProgress}%` }}
               />
             </div>
