@@ -374,16 +374,16 @@ const Player = () => {
                                     <Link 
                                         to={getAlbumUrl(currentSong)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="block hover:underline"
+                                        className="block"
                                     >
-                                        <p className="text-white font-bold text-sm truncate">{cleanTitle(currentSong.title)}</p>
+                                        <p className="text-white font-bold text-sm truncate hover:text-white/70 transition-colors">{cleanTitle(currentSong.title)}</p>
                                     </Link>
                                     <Link 
                                         to={getArtistUrl(currentSong)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="block hover:underline"
+                                        className="block"
                                     >
-                                        <p className="text-white/80 text-xs truncate">{currentSong.artistName}</p>
+                                        <p className="text-white/80 text-xs truncate hover:text-white/60 transition-colors">{currentSong.artistName}</p>
                                     </Link>
                                 </div>
                                 <Button
