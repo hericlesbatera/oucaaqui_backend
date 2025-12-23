@@ -255,10 +255,10 @@ ${document.querySelector('[data-debug-logs]')?.innerText || 'Nenhum log'}
             className={`w-full font-medium py-2 px-4 rounded-lg transition text-white ${
               status === 'error'
                 ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-blue-500 hover:bg-blue-600'
+                : 'bg-green-500 hover:bg-green-600'
             }`}
           >
-            {status === 'error' ? 'Fechar' : 'Fechar'}
+            {status === 'error' ? 'Fechar' : '✓ JÁ BAIXADO'}
           </button>
         )}
       </div>

@@ -1368,6 +1368,7 @@ const AlbumPage = () => {
                 setDownloadErrorMessage('');
                 setCurrentDownloadSong('');
                 setCurrentDownloadIndex(0);
+                setDownloadInProgress(false); // IMPORTANTE: Reset do estado do botão
               }}
             />
 
