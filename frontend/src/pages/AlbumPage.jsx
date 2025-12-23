@@ -767,7 +767,18 @@ const AlbumPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white pb-32">
+        <>
+            {/* SEO Meta Tags para compartilhamento em redes sociais */}
+            {album && artist && (
+                <SEO
+                    title={`${album.title} - ${album.genre ? album.genre.charAt(0).toUpperCase() + album.genre.slice(1) : 'Música'}`}
+                    description={`Clique agora para baixar e ouvir grátis ${album.title} postado por ${artist?.name || 'Artista'}. ${albumSongs.length} música${albumSongs.length !== 1 ? 's' : ''} disponíveis no Ouça Aqui!`}
+                    image={album.coverImage || album.cover_url}
+                    url={window.location.href}
+                    type="music.album"
+                />
+            )}
+            <div className="min-h-screen bg-white pb-32">
             {/* Album Header */}
             <div className="relative bg-gradient-to-b from-red-900 to-black pt-6 md:pt-20 pb-4 md:pb-8">
                 <div className="max-w-7xl mx-auto px-4">
