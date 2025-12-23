@@ -207,9 +207,15 @@ export const PlayerProvider = ({ children }) => {
     setIsPlaying(!isPlaying);
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
+    // Se já tocou mais de 3 segundos, volta ao início da música atual
     if (currentTime > 3) {
       audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+      // Garante que continue tocando
+      if (!isPlaying) {
+        setIsPlaying(true);
+      }
       return;
     }
 
@@ -220,12 +226,20 @@ export const PlayerProvider = ({ children }) => {
 
     if (prevIndex < 0) {
       if (repeatMode === 'all') {
+        // Vai para a última música da fila
         setCurrentSong(queue[queue.length - 1]);
+        setIsPlaying(true);
+      } else {
+        // Volta ao início da música atual
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
       }
     } else {
+      // Vai para a música anterior
       setCurrentSong(queue[prevIndex]);
+      setIsPlaying(true);
     }
-  };
+  }, [currentTime, queue, currentSong, repeatMode, isPlaying]);
 
   const seekTo = (time) => {
     audioRef.current.currentTime = time;
