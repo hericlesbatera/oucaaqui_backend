@@ -311,105 +311,26 @@ function AppRoutes() {
       
 
       
-      {/* Artist Routes - Protected */}
+      {/* Artist Routes - Protected with shared layout */}
       <Route
-        path="/artist/dashboard"
+        path="/artist"
         element={
           <ProtectedRoute>
-            <ArtistLayout>
-              <DashboardNew />
-            </ArtistLayout>
+            <ArtistPanelLayout />
           </ProtectedRoute>
         }
-      />
-      
-      <Route
-        path="/artist/upload"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <UploadNew />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/artist/albums"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <MyAlbums />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/artist/playlists"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <MyPlaylists />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/artist/favoritos"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <Favoritos />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/artist/meus-videos"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <MeusVideos />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/artist/support"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <Support />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/artist/settings"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <SettingsNew />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/artist/email-senha"
-        element={
-          <ProtectedRoute>
-            <ArtistLayout>
-              <EmailSenha />
-            </ArtistLayout>
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="dashboard" element={<DashboardNew />} />
+        <Route path="upload" element={<UploadNew />} />
+        <Route path="albums" element={<MyAlbums />} />
+        <Route path="playlists" element={<MyPlaylists />} />
+        <Route path="favoritos" element={<Favoritos />} />
+        <Route path="meus-videos" element={<MeusVideos />} />
+        <Route path="support" element={<Support />} />
+        <Route path="settings" element={<SettingsNew />} />
+        <Route path="email-senha" element={<EmailSenha />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+      </Route>
       
       {/* Admin Routes */}
       <Route
