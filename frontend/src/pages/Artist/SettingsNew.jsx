@@ -530,6 +530,7 @@ const SettingsNew = () => {
             </Card>
           </div>
         </div>
+      </div>
   );
 };
 
