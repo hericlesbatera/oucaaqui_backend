@@ -19,11 +19,13 @@ app.add_middleware(
         "https://web-production-4b0ad.up.railway.app",
         "https://musicasua.vercel.app",
         "http://localhost:3000",
-        "http://localhost:5000"
+        "http://localhost:5000",
+        "https://frontend-fixer-17.preview.emergentagent.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length"],
 )
 
 # Include routers with /api prefix
