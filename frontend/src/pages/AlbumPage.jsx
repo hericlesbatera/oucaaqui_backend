@@ -14,6 +14,8 @@ import { toast } from '../hooks/use-toast';
 import AlbumSongRow from '../components/AlbumSongRow';
 import DownloadProgressModal from '../components/DownloadProgressModal';
 import SEO from '../components/SEO';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Http } from '@capacitor-community/http';
