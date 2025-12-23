@@ -292,24 +292,37 @@ const AlbumPage = () => {
                   console.error('Erro ao carregar músicas:', songsError);
               }
               if (songs && songs.length > 0) {
-                  const processedSongs = songs.map(song => ({
-                      id: song.id,
-                      title: song.title,
-                      artistName: song.artist_name,
-                      artistId: song.artist_id,
-                      artistSlug: artistData?.slug,
-                      albumId: song.album_id,
-                      albumSlug: supabaseAlbum.slug,
-                      albumName: song.album_name,
-                      coverImage: song.cover_url || supabaseAlbum.cover_url || '/images/default-album.png',
-                      audioUrl: song.audio_url,
-                      duration: song.duration || 0,
-                      trackNumber: song.track_number,
-                      composer: song.composer,
-                      isrc: song.isrc
-                  }));
+                  const processedSongs = songs.map(song => {
+                      // Garantir que a URL de áudio está completa
+                      let audioUrl = song.audio_url;
+                      
+                      // Se a URL é relativa (começa com 'songs/' ou similar), construir URL completa do Supabase
+                      if (audioUrl && !audioUrl.startsWith('http')) {
+                          const SUPABASE_URL = 'https://rtdxqthhhwqnlrevzmap.supabase.co';
+                          audioUrl = `${SUPABASE_URL}/storage/v1/object/public/${audioUrl}`;
+                      }
+                      
+                      return {
+                          id: song.id,
+                          title: song.title,
+                          artistName: song.artist_name,
+                          artistId: song.artist_id,
+                          artistSlug: artistData?.slug,
+                          albumId: song.album_id,
+                          albumSlug: supabaseAlbum.slug,
+                          albumName: song.album_name,
+                          coverImage: song.cover_url || supabaseAlbum.cover_url || '/images/default-album.png',
+                          audioUrl: audioUrl,
+                          duration: song.duration || 0,
+                          trackNumber: song.track_number,
+                          composer: song.composer,
+                          isrc: song.isrc
+                      };
+                  });
                   setAlbumSongs(processedSongs);
                   console.log(`Carregadas ${processedSongs.length} músicas`);
+                  // Debug: mostrar URLs de áudio
+                  console.log('URLs de áudio das músicas:', processedSongs.map(s => ({ title: s.title, audioUrl: s.audioUrl?.substring(0, 80) + '...' })));
               } else {
                   console.warn('Nenhuma música encontrada para o álbum', {
                       albumId: supabaseAlbum.id,
