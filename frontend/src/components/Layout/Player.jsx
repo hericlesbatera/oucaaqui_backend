@@ -498,7 +498,7 @@ const Player = () => {
                                         e.stopPropagation();
                                         handleDownload();
                                     }}
-                                    className="text-white hover:bg-white/20 border border-white/30 px-3 h-8 text-xs"
+                                    className="text-white hover:bg-white hover:text-red-600 border border-white/30 hover:border-white px-3 h-8 text-xs transition-all"
                                 >
                                     <Download className="w-3.5 h-3.5 mr-1.5" />
                                     BAIXAR
