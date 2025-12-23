@@ -60,8 +60,52 @@ const Player = () => {
         cover: null
     });
 
+    // Ref para a fila de reprodução (para auto-scroll)
+    const queueContainerRef = useRef(null);
+    const currentSongRef = useRef(null);
+
     // Use music favorite hook (must be called before early return)
     const { isFavorite, toggleFavorite, loading: favoriteLoading } = useMusicFavorite(currentSong?.id || null);
+
+    // Auto-scroll da fila para a música atual
+    useEffect(() => {
+        if (showQueue && currentSongRef.current && queueContainerRef.current) {
+            const container = queueContainerRef.current;
+            const element = currentSongRef.current;
+            
+            // Calcular posição para centralizar o elemento
+            const containerWidth = container.offsetWidth;
+            const elementLeft = element.offsetLeft;
+            const elementWidth = element.offsetWidth;
+            const scrollPosition = elementLeft - (containerWidth / 2) + (elementWidth / 2);
+            
+            container.scrollTo({
+                left: Math.max(0, scrollPosition),
+                behavior: 'smooth'
+            });
+        }
+    }, [showQueue, currentSong?.id]);
+
+    // Função para obter URL do álbum
+    const getAlbumUrl = (song) => {
+        if (!song) return '#';
+        const artistSlug = song.artistSlug || song.artist_slug || song.artistId || song.artist_id;
+        const albumSlug = song.albumSlug || song.album_slug || song.albumId || song.album_id;
+        if (artistSlug && albumSlug) {
+            return `/${artistSlug}/${albumSlug}`;
+        }
+        return '#';
+    };
+
+    // Função para obter URL do artista
+    const getArtistUrl = (song) => {
+        if (!song) return '#';
+        const artistSlug = song.artistSlug || song.artist_slug || song.artistId || song.artist_id;
+        if (artistSlug) {
+            return `/${artistSlug}`;
+        }
+        return '#';
+    };
 
     // Abrir player mobile fullscreen ao clicar em play (apenas mobile)
     useEffect(() => {
