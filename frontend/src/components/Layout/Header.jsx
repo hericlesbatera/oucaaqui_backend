@@ -29,7 +29,9 @@ const getCachedAvatar = (userId) => {
                 return url;
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        // Silently ignore localStorage errors
+    }
     return null;
 };
 
@@ -39,7 +41,9 @@ const setCachedAvatar = (userId, url) => {
             url,
             timestamp: Date.now()
         }));
-    } catch (e) {}
+    } catch (e) {
+        // Silently ignore localStorage errors
+    }
 };
 
 const Header = () => {
