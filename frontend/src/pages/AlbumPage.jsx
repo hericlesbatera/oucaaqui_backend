@@ -622,8 +622,31 @@ const AlbumPage = () => {
                     // Mobile: baixar sempre os MP3s individuais, ignorando ZIP
                     clearInterval(preparingInterval);
                     setDownloadStatus('downloading');
+                    
+                    // Log das músicas para debug
+                    console.log('🎵 Músicas para download:', songs.length);
+                    songs.forEach((s, i) => {
+                        console.log(`   ${i + 1}. ${s.title} - URL: ${s.audioUrl ? 'OK' : 'VAZIA'}`);
+                    });
+                    
+                    // Garantir que todas as músicas têm URLs completas
+                    const SUPABASE_URL = 'https://rtdxqthhhwqnlrevzmap.supabase.co';
+                    const songsWithUrls = songs.map(song => {
+                        let audioUrl = song.audioUrl || song.audio_url || song.url;
+                        
+                        // Se a URL é relativa, construir URL completa
+                        if (audioUrl && !audioUrl.startsWith('http')) {
+                            audioUrl = `${SUPABASE_URL}/storage/v1/object/public/${audioUrl}`;
+                        }
+                        
+                        return {
+                            ...song,
+                            audioUrl: audioUrl
+                        };
+                    });
+                    
                     try {
-                        const result = await downloadAlbum(albumData, songs);
+                        const result = await downloadAlbum(albumData, songsWithUrls);
                         setLocalDownloadProgress(100);
                         setDownloadStatus('completed');
                         return result;
