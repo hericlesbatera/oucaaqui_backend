@@ -20,11 +20,6 @@ const MobilePlayerSheet = ({
   const [showVolumeControl, setShowVolumeControl] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
 
-  useEffect(() => {
-    // Verificar se a música está favoritada (você pode integrar com seu backend)
-    checkIfFavorite();
-  }, [currentSong]);
-
   const checkIfFavorite = async () => {
     if (!currentSong) return;
     try {
@@ -36,6 +31,12 @@ const MobilePlayerSheet = ({
       console.error('Erro ao verificar favorito:', error);
     }
   };
+
+  useEffect(() => {
+    // Verificar se a música está favoritada (você pode integrar com seu backend)
+    checkIfFavorite();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong]);
 
   const handleToggleFavorite = async () => {
     if (!currentSong) return;
