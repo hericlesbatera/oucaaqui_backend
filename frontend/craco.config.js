@@ -38,6 +38,11 @@ const webpackConfig = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
+      // Ignore source map warnings from node_modules
+      webpackConfig.ignoreWarnings = [
+        /Failed to parse source map/,
+      ];
+      
       // Disable hot reload completely if environment variable is set
       if (config.disableHotReload) {
         // Remove hot reload related plugins
