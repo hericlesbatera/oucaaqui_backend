@@ -247,8 +247,8 @@ const DashboardNew = () => {
           </div>
         </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mb-6">
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
             {tabs.map(tab => (
               <Button
                 key={tab.id}
