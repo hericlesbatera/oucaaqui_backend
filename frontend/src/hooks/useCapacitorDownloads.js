@@ -66,38 +66,89 @@ const downloadFile = async (url, fileName, albumDir) => {
             throw new Error(`URL vazia para arquivo ${fileName}`);
         }
 
-        console.log(`Iniciando download: ${fileName}`);
-        console.log(`   URL: ${url}`);
+        console.log(`📥 Iniciando download: ${fileName}`);
+        console.log(`   URL: ${url.substring(0, 100)}...`);
 
-        // Tentar baixar diretamente com Http.downloadFile
-        try {
-            const albumPath = `${DOWNLOADS_DIR}/${albumDir}`;
-            try { await Filesystem.mkdir({ path: albumPath, directory: Directory.Data, recursive: true }); } catch {}
-            const filePath = `${albumPath}/${fileName}`;
-            console.log(`   Usando Http.downloadFile -> ${filePath}`);
-            const res = await Http.downloadFile({
-                url,
-                filePath,
-                fileDirectory: FilesystemDirectory.Data,
-                method: 'GET'
-            });
-            console.log(`   Http.downloadFile OK: ${JSON.stringify(res)}`);
-            return true;
-        } catch (httpErr) {
-            console.warn(`   Http.downloadFile falhou: ${httpErr.message}. Fallback para CapacitorHttp...`);
+        // Criar diretório do álbum
+        const albumPath = `${DOWNLOADS_DIR}/${albumDir}`;
+        try { 
+            await Filesystem.mkdir({ 
+                path: albumPath, 
+                directory: Directory.Data, 
+                recursive: true 
+            }); 
+        } catch (mkdirErr) {
+            // Diretório já existe, ignorar
         }
-
-        // Usar CapacitorHttp nativo (ignora CORS)
-        let base64Data;
         
+        const filePath = `${albumPath}/${fileName}`;
+
+        // Método 1: Tentar Http.downloadFile (mais eficiente para arquivos grandes)
         try {
-            console.log(`   Usando CapacitorHttp (nativo)...`);
-            const response = await CapacitorHttp.get({
+            console.log(`   Tentando Http.downloadFile...`);
+            const downloadResult = await Http.downloadFile({
                 url: url,
-                responseType: 'blob',
+                filePath: filePath,
+                fileDirectory: FilesystemDirectory.Data,
+                method: 'GET',
                 headers: {
                     'Accept': 'audio/mpeg,audio/*,*/*'
                 }
+            });
+            
+            if (downloadResult && downloadResult.path) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`   ✅ Download OK via Http.downloadFile (${elapsed}s)`);
+                return true;
+            }
+        } catch (httpErr) {
+            console.warn(`   ⚠️ Http.downloadFile falhou: ${httpErr.message}`);
+        }
+
+        // Método 2: Fallback - Fetch + writeFile (funciona em mais casos)
+        try {
+            console.log(`   Tentando fetch + writeFile...`);
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const blob = await response.blob();
+            
+            // Converter blob para base64
+            const reader = new FileReader();
+            const base64Promise = new Promise((resolve, reject) => {
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+            });
+            reader.readAsDataURL(blob);
+            const base64Data = await base64Promise;
+            
+            // Salvar arquivo
+            await Filesystem.writeFile({
+                path: filePath,
+                data: base64Data,
+                directory: Directory.Data
+            });
+            
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`   ✅ Download OK via fetch+writeFile (${elapsed}s)`);
+            return true;
+            
+        } catch (fetchErr) {
+            console.error(`   ❌ Fetch falhou: ${fetchErr.message}`);
+            throw fetchErr;
+        }
+
+    } catch (error) {
+        console.error(`❌ Erro no download de ${fileName}:`, error.message);
+        return false;
+    }
+};
             });
             
             if (response.status !== 200) {
