@@ -614,50 +614,44 @@ const UploadNew = () => {
     const finalUrl = formData.customUrl || generateDefaultUrl(formData.title);
 
     return (
-        <div className="bg-gray-50 flex min-h-screen">
-            {/* Sidebar - Fixed Position */}
-            <div className="hidden md:block w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-                <ArtistSidebar />
-            </div>
-
+        <div className="bg-gray-50 min-h-screen">
             {/* Main Content */}
-            <div className="flex-1">
-                <div className="max-w-6xl mx-auto p-4 md:p-8">
-                    <div className="mb-6 md:mb-8">
-                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
-                            <Upload className="w-6 md:w-8 h-6 md:h-8 text-red-600 flex-shrink-0" />
-                            Upload de Álbum
-                        </h1>
-                    </div>
+            <div className="max-w-6xl mx-auto p-4 md:p-8">
+                <div className="mb-6 md:mb-8">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
+                        <Upload className="w-6 md:w-8 h-6 md:h-8 text-red-600 flex-shrink-0" />
+                        Upload de Álbum
+                    </h1>
+                </div>
 
 
 
-                    {/* Progress Indicator */}
-                    <div className="mb-6 md:mb-8">
-                        <div className="flex items-center justify-between gap-1 md:gap-2">
-                            {[1, 2, 3].map((step) => (
-                                <React.Fragment key={step}>
-                                    <div className="flex flex-col items-center flex-1">
-                                        <div
-                                            className={`w-7 md:w-8 h-7 md:h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all flex-shrink-0 ${step === currentStep
-                                                ? 'bg-red-600 text-white scale-110'
-                                                : step < currentStep
-                                                    ? 'bg-green-600 text-white'
-                                                    : 'bg-gray-300 text-gray-700'
-                                                }`}
-                                        >
-                                            {step < currentStep ? <CheckCircle className="w-3 md:w-3.5 h-3 md:h-3.5" /> : step}
-                                        </div>
-                                        <p
-                                            className={`text-xs leading-tight mt-1 hidden md:block ${step === currentStep ? 'text-red-600 font-semibold' : 'text-gray-600'
-                                                }`}
-                                            style={{ lineHeight: '1.2' }}
-                                        >
-                                            {step === 1 && 'Informações\nBásicas'}
-                                            {step === 2 && 'Privacidade\ne URL'}
-                                            {step === 3 && 'Upload do\nArquivo'}
-                                        </p>
+                {/* Progress Indicator */}
+                <div className="mb-6 md:mb-8">
+                    <div className="flex items-center justify-between gap-1 md:gap-2">
+                        {[1, 2, 3].map((step) => (
+                            <React.Fragment key={step}>
+                                <div className="flex flex-col items-center flex-1">
+                                    <div
+                                        className={`w-7 md:w-8 h-7 md:h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all flex-shrink-0 ${step === currentStep
+                                            ? 'bg-red-600 text-white scale-110'
+                                            : step < currentStep
+                                                ? 'bg-green-600 text-white'
+                                                : 'bg-gray-300 text-gray-700'
+                                            }`}
+                                    >
+                                        {step < currentStep ? <CheckCircle className="w-3 md:w-3.5 h-3 md:h-3.5" /> : step}
                                     </div>
+                                    <p
+                                        className={`text-xs leading-tight mt-1 hidden md:block ${step === currentStep ? 'text-red-600 font-semibold' : 'text-gray-600'
+                                            }`}
+                                        style={{ lineHeight: '1.2' }}
+                                    >
+                                        {step === 1 && 'Informações\nBásicas'}
+                                        {step === 2 && 'Privacidade\ne URL'}
+                                        {step === 3 && 'Upload do\nArquivo'}
+                                    </p>
+                                </div>
                                     {step < 3 && (
                                         <div
                                             className={`flex-1 h-0.5 mx-1 ${step < currentStep ? 'bg-green-600' : 'bg-gray-300'
