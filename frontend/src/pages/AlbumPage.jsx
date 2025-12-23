@@ -601,20 +601,26 @@ const AlbumPage = () => {
                             document.body.removeChild(link);
                             window.URL.revokeObjectURL(url);
                         } else {
-                            // Se não houver content-length, simular progresso gradual
-                            const progressInterval = setInterval(() => {
-                                setLocalDownloadProgress(prev => {
-                                    if (prev >= 95) {
-                                        clearInterval(progressInterval);
-                                        return 95;
-                                    }
-                                    return prev + 2;
-                                });
-                            }, 500);
+                            // Se não houver content-length, usar stream para medir progresso real
+                            const reader = response.body.getReader();
+                            const chunks = [];
+                            let receivedLength = 0;
                             
-                            const blob = await response.blob();
-                            clearInterval(progressInterval);
+                            // Estimar tamanho baseado no número de músicas (aprox 4MB por música)
+                            const estimatedSize = albumSongs.length * 4 * 1024 * 1024;
+
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                chunks.push(value);
+                                receivedLength += value.length;
+                                // Progresso baseado na estimativa
+                                const downloadPercent = Math.min(receivedLength / estimatedSize, 1);
+                                const progress = 35 + (downloadPercent * 64);
+                                setLocalDownloadProgress(Math.min(progress, 99));
+                            }
                             
+                            const blob = new Blob(chunks);
                             const extension = downloadUrl.includes('.rar') ? 'rar' : 'zip';
                             const filename = `${album.title}.${extension}`;
                             
