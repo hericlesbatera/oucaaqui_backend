@@ -237,21 +237,15 @@ const DashboardNew = () => {
   }
 
   return (
-    <div className="bg-gray-50 flex min-h-screen">
-      {/* Sidebar - Fixed Position */}
-      <div className="w-64 sticky top-0 h-screen border-r border-gray-200 bg-white">
-        <ArtistSidebar />
-      </div>
-      
-      <div className="flex-1">
-        <div className="max-w-5xl mx-auto p-6">
-          {/* Header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="w-8 h-8 text-red-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Estatísticas</h1>
-            </div>
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-5xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3">
+            <BarChart3 className="w-8 h-8 text-red-600" />
+            <h1 className="text-3xl font-bold text-gray-900">Estatísticas</h1>
           </div>
+        </div>
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
