@@ -353,23 +353,41 @@ const Player = () => {
                 </button>
 
                 {/* Main Player */}
-                <div className="bg-gradient-to-r from-red-600 to-red-700 border-t border-white/20 px-4 py-2 w-full cursor-pointer hover:bg-red-600/90 transition-colors" onClick={() => currentSong && setDesktopPlayerOpen(true)}>
+                <div className="bg-gradient-to-r from-red-600 to-red-700 border-t border-white/20 px-4 py-2 w-full">
                     <div className="max-w-screen-2xl mx-auto">
                         <div className="flex items-center justify-between gap-4">
                             {/* Song Info */}
                             <div className="flex items-center gap-3 w-72">
-                                <div className="relative group">
+                                <Link 
+                                    to={getAlbumUrl(currentSong)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="relative group flex-shrink-0"
+                                >
                                     <img
                                         src={imageError ? '/images/default-album.png' : currentSong.coverImage}
                                         alt={currentSong.title}
                                         className="w-11 h-11 rounded object-cover shadow-lg group-hover:shadow-xl transition-all group-hover:brightness-75"
                                         onError={() => setImageError(true)}
                                     />
-                                    <div className="absolute inset-0 bg-black/20 rounded opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
+                                    <div className="absolute inset-0 bg-black/20 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <span className="text-white text-xs font-medium">Ver álbum</span>
+                                    </div>
+                                </Link>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-white font-bold text-sm truncate">{cleanTitle(currentSong.title)}</p>
-                                    <p className="text-white/80 text-xs truncate">{currentSong.artistName}</p>
+                                    <Link 
+                                        to={getAlbumUrl(currentSong)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="block hover:underline"
+                                    >
+                                        <p className="text-white font-bold text-sm truncate">{cleanTitle(currentSong.title)}</p>
+                                    </Link>
+                                    <Link 
+                                        to={getArtistUrl(currentSong)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="block hover:underline"
+                                    >
+                                        <p className="text-white/80 text-xs truncate">{currentSong.artistName}</p>
+                                    </Link>
                                 </div>
                                 <Button
                                     variant="ghost"
