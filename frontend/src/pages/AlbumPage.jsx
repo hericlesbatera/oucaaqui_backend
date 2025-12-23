@@ -548,39 +548,95 @@ const AlbumPage = () => {
                     clearInterval(preparingInterval);
                     setDownloadStatus('downloading');
                     
-                    // Verificar se tem URL direta do arquivo
-                    if (!album.archiveUrl) {
-                        throw new Error('Este álbum não possui arquivo para download. Entre em contato com o artista.');
+                    // Se tem archiveUrl (ZIP pronto), fazer download direto
+                    if (album.archiveUrl) {
+                        const downloadUrl = album.archiveUrl;
+                        
+                        let progress = 35;
+                        const progressInterval = setInterval(() => {
+                            progress += Math.random() * 8 + 3;
+                            if (progress >= 95) {
+                                progress = 95;
+                                clearInterval(progressInterval);
+                            }
+                            setLocalDownloadProgress(progress);
+                        }, 150);
+                        
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        link.download = `${album.title}.${downloadUrl.includes('.rar') ? 'rar' : 'zip'}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        setTimeout(() => {
+                            clearInterval(progressInterval);
+                            setLocalDownloadProgress(100);
+                            setDownloadStatus('completed');
+                            setDownloadInProgress(false);
+                        }, 1500);
+                        return;
                     }
                     
-                    const downloadUrl = album.archiveUrl;
+                    // Se não tem archiveUrl, criar ZIP no navegador
+                    const zip = new JSZip();
+                    const totalSongs = albumSongs.length;
+                    let downloadedSongs = 0;
                     
-                    // Progresso simulado enquanto o navegador baixa
-                    let progress = 35;
-                    const progressInterval = setInterval(() => {
-                        progress += Math.random() * 8 + 3;
-                        if (progress >= 95) {
-                            progress = 95;
-                            clearInterval(progressInterval);
+                    setLocalDownloadProgress(5);
+                    setCurrentDownloadIndex(0);
+                    
+                    // Baixar cada música e adicionar ao ZIP
+                    for (const song of albumSongs) {
+                        try {
+                            const audioUrl = song.audioUrl || song.audio_url;
+                            if (!audioUrl) continue;
+                            
+                            setCurrentDownloadSong(song.title);
+                            setCurrentDownloadIndex(downloadedSongs + 1);
+                            
+                            const response = await fetch(audioUrl);
+                            if (!response.ok) continue;
+                            
+                            const blob = await response.blob();
+                            const trackNum = String(song.trackNumber || downloadedSongs + 1).padStart(2, '0');
+                            const fileName = `${trackNum} - ${song.title.replace(/[<>:"/\\|?*]/g, '')}.mp3`;
+                            
+                            zip.file(fileName, blob);
+                            downloadedSongs++;
+                            
+                            // Progresso de 5% a 90% durante download das músicas
+                            const progress = 5 + (downloadedSongs / totalSongs) * 85;
+                            setLocalDownloadProgress(progress);
+                        } catch (err) {
+                            console.error(`Erro ao baixar ${song.title}:`, err);
                         }
+                    }
+                    
+                    if (downloadedSongs === 0) {
+                        throw new Error('Não foi possível baixar nenhuma música');
+                    }
+                    
+                    // Gerar o ZIP (90% a 99%)
+                    setLocalDownloadProgress(92);
+                    setCurrentDownloadSong('Criando arquivo ZIP...');
+                    
+                    const zipBlob = await zip.generateAsync({ 
+                        type: 'blob',
+                        compression: 'DEFLATE',
+                        compressionOptions: { level: 1 } // Compressão rápida
+                    }, (metadata) => {
+                        const progress = 92 + (metadata.percent / 100) * 7;
                         setLocalDownloadProgress(progress);
-                    }, 150);
+                    });
                     
-                    // Abrir download direto
-                    const link = document.createElement('a');
-                    link.href = downloadUrl;
-                    link.download = `${album.title}.${downloadUrl.includes('.rar') ? 'rar' : 'zip'}`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    // Download do ZIP
+                    setLocalDownloadProgress(99);
+                    saveAs(zipBlob, `${album.title}.zip`);
                     
-                    // Finalizar após breve delay
-                    setTimeout(() => {
-                        clearInterval(progressInterval);
-                        setLocalDownloadProgress(100);
-                        setDownloadStatus('completed');
-                        setDownloadInProgress(false);
-                    }, 1500);
+                    setLocalDownloadProgress(100);
+                    setDownloadStatus('completed');
+                    setDownloadInProgress(false);
                 },
                 onMobile: async ({ album: albumData, albumSongs: songs, onProgress }) => {
                     // Mobile: baixar sempre os MP3s individuais, ignorando ZIP
