@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { PlayerProvider, usePlayer } from "./context/PlayerContext";
 import { usePlayerActive } from "./hooks/usePlayerActive";
@@ -15,6 +15,7 @@ import FooterSimple from "./components/Layout/FooterSimple";
 import Player from "./components/Layout/Player";
 import MobileBottomNav from "./components/Layout/MobileBottomNav";
 import MobileLayout from "./components/Layout/MobileLayout";
+import ArtistPanelLayout from "./components/Artist/ArtistPanelLayout";
 
 // Pages
 import Login from "./pages/Login";
