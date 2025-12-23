@@ -149,7 +149,6 @@ const downloadFile = async (url, fileName, albumDir) => {
         return false;
     }
 };
-            });
 
 // Converter Blob para Base64 com timeout e otimização
 const blobToBase64 = (blob) => {
