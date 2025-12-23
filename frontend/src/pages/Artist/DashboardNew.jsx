@@ -270,8 +270,8 @@ const DashboardNew = () => {
             ))}
           </div>
 
-          {/* Album List (CDS/SINGLES tab) */}
-          {activeTab === 'cds' && (
+        {/* Album List (CDS/SINGLES tab) */}
+        {activeTab === 'cds' && (
             <Card className="mb-6 border-red-200 overflow-hidden">
               <CardContent className="p-0">
                 {loading && albums.length === 0 ? (
