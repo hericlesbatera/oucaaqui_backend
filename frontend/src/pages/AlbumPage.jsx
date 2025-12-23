@@ -384,9 +384,6 @@ const AlbumPage = () => {
                  const recommended = recommendedList
                      .slice(0, 6)
                      .map(recAlbum => {
-                         // Usar o slug do artista da relação (artist.slug) ou fallback para artist_id
-                         const recArtistSlug = recAlbum.artist?.slug || recAlbum.artist_id;
-                         
                          return {
                              id: recAlbum.id,
                              slug: recAlbum.slug,
@@ -396,12 +393,11 @@ const AlbumPage = () => {
                              coverImage: recAlbum.cover_url || '/images/default-album.png',
                              playCount: recAlbum.play_count || 0,
                              downloadCount: recAlbum.download_count || 0,
-                             artistSlug: recArtistSlug,
+                             artistSlug: recAlbum.artist_id, // Usar artist_id como slug
                              artistVerified: false,
                              collaborators: []
                          };
-                     })
-                     .slice(0, 6); // Dupla verificação
+                     });
                  setRecommendedAlbums(recommended);
              } else {
                  // Garantir que está vazio se não houver recomendados
