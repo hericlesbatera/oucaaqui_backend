@@ -1289,12 +1289,12 @@ const AlbumPage = () => {
             {/* Ouça Aqui Recomenda Section */}
             <div className="max-w-7xl mx-auto px-4 mt-16 mb-16">
                 <div className="flex items-center gap-2 mb-6 flex-wrap">
-                    <ThumbsUp className="w-8 h-8 text-red-600 flex-shrink-0" />
-                    <h2 className="text-2xl md:text-3xl font-bold text-black whitespace-nowrap">Ouça Aqui Recomenda!</h2>
+                    <ThumbsUp className="w-6 md:w-8 h-6 md:h-8 text-red-600 flex-shrink-0" />
+                    <h2 className="text-xl md:text-2xl font-bold text-black whitespace-nowrap">Ouça Aqui Recomenda!</h2>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                     {recommendedAlbums.length === 0 ? (
-                        <p className="text-gray-500 py-8 col-span-full">Nenhum álbum disponível no momento.</p>
+                        <p className="text-gray-500 py-8 col-span-full text-center">Nenhum álbum disponível no momento.</p>
                     ) : (
                         recommendedAlbums.map((recAlbum) => (
                             <div key={recAlbum.id}>
@@ -1302,38 +1302,37 @@ const AlbumPage = () => {
                                     to={`/${recAlbum.artistSlug}/${recAlbum.slug || recAlbum.id}`}
                                     className="group cursor-pointer block"
                                 >
-                                    <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
+                                    <div className="relative mb-2 md:mb-3 overflow-hidden rounded-lg shadow-lg">
                                         <img
                                             src={recAlbum.coverImage}
                                             alt={recAlbum.title}
                                             className="w-full aspect-square object-cover transform group-hover:scale-110 transition-transform duration-300"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = '/images/default-album.png'; }}
                                         />
                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
-                                            <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all duration-300">
-                                                <Play className="w-5 h-5 text-white ml-1" fill="white" />
+                                            <div className="w-10 md:w-12 h-10 md:h-12 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all duration-300">
+                                                <Play className="w-4 md:w-5 h-4 md:h-5 text-white ml-0.5" fill="white" />
                                             </div>
                                         </div>
                                     </div>
-                                    <h3 className="text-black font-semibold text-sm mb-1 truncate group-hover:text-red-600 transition-colors">
+                                    <h3 className="text-gray-900 font-semibold text-xs md:text-sm mb-1 truncate group-hover:text-red-600 transition-colors">
                                         {recAlbum.title}
                                     </h3>
                                 </Link>
-                                <div className="flex items-center gap-1 text-gray-600 text-xs mb-2">
-                                    <Link
-                                        to={`/${recAlbum.artistSlug}`}
-                                        className="hover:text-red-600 transition-colors truncate"
-                                    >
-                                        {recAlbum.artistName}
-                                    </Link>
-                                </div>
-                                <div className="flex items-center gap-2 text-xs">
-                                    <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+                                <Link
+                                    to={`/${recAlbum.artistSlug}`}
+                                    className="flex items-center gap-1 text-gray-500 text-xs truncate hover:text-red-600 transition-colors mb-1 md:mb-2"
+                                >
+                                    <span className="truncate">{recAlbum.artistName}</span>
+                                </Link>
+                                <div className="flex items-center gap-1 md:gap-2 text-xs flex-wrap">
+                                    <div className="flex items-center gap-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-gray-100 rounded">
                                         <span className="font-bold text-gray-700">{recAlbum.playCount > 999 ? (recAlbum.playCount / 1000).toFixed(1) + 'K' : recAlbum.playCount}</span>
-                                        <span className="text-gray-500">Plays</span>
+                                        <span className="text-gray-500 hidden sm:inline">Plays</span>
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
+                                    <div className="flex items-center gap-1 px-1.5 md:px-2 py-0.5 md:py-1 bg-gray-100 rounded">
                                         <span className="font-bold text-gray-700">{recAlbum.downloadCount > 999 ? (recAlbum.downloadCount / 1000).toFixed(1) + 'K' : recAlbum.downloadCount}</span>
-                                        <span className="text-gray-500">Downloads</span>
+                                        <span className="text-gray-500 hidden sm:inline">Downloads</span>
                                     </div>
                                 </div>
                             </div>
