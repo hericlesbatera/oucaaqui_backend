@@ -33,15 +33,24 @@ const TopCds = () => {
         setLoading(true);
 
         try {
+            // Buscar artistas primeiro
+            const { data: artistsData } = await supabase
+                .from('artists')
+                .select('id, name, slug, is_verified, avatar_url');
+            
+            const artistsMap = {};
+            if (artistsData) {
+                artistsData.forEach(artist => {
+                    artistsMap[artist.id] = artist;
+                });
+            }
+
             // Buscar todos os álbuns públicos não deletados
             const { data: allAlbums, error } = await supabase
                 .from('albums')
-                .select(`
-           *,
-           artist:artists(id, name, slug, is_verified, avatar_url)
-         `)
+                .select('*')
                 .or(`is_private.is.null,is_private.eq.false`)
-                .filter('deleted_at', 'is', null)
+                .is('deleted_at', null)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -65,39 +74,30 @@ const TopCds = () => {
             const collaboratorsByAlbum = {};
 
             if (allCollabInvites && allCollabInvites.length > 0) {
-                const invitedUserIds = [...new Set(allCollabInvites.map(c => c.invited_user_id))];
-
-                // Buscar artistas pelos user IDs
-                const { data: collabArtists } = await supabase
-                    .from('artists')
-                    .select('id, name, slug, is_verified')
-                    .in('id', invitedUserIds);
-
-                if (collabArtists) {
-                    // Mapear artistas por ID
-                    const artistsMap = {};
-                    collabArtists.forEach(artist => {
-                        artistsMap[artist.id] = artist;
-                    });
-
-                    // Agrupar por album
-                    allCollabInvites.forEach(collab => {
-                        if (artistsMap[collab.invited_user_id]) {
-                            if (!collaboratorsByAlbum[collab.album_id]) {
-                                collaboratorsByAlbum[collab.album_id] = [];
-                            }
-                            collaboratorsByAlbum[collab.album_id].push(artistsMap[collab.invited_user_id]);
+                allCollabInvites.forEach(collab => {
+                    if (artistsMap[collab.invited_user_id]) {
+                        if (!collaboratorsByAlbum[collab.album_id]) {
+                            collaboratorsByAlbum[collab.album_id] = [];
                         }
-                    });
-                }
+                        collaboratorsByAlbum[collab.album_id].push(artistsMap[collab.invited_user_id]);
+                    }
+                });
             }
 
             // Mapear colaboradores nos albums
             const formattedAlbums = publicAlbums.map(album => {
+                const artist = artistsMap[album.artist_id] || {};
                 const collaborators = collaboratorsByAlbum[album.id] || [];
 
                 return {
                     ...album,
+                    artist: artist,
+                    artistName: artist.name || album.artist_name || 'Artista',
+                    artistSlug: artist.slug || album.artist_id,
+                    artistVerified: artist.is_verified || false,
+                    collaborators
+                };
+            });
                     collaborators: collaborators
                 };
             });
