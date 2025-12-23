@@ -299,6 +299,7 @@ const AlbumPage = () => {
                       artistId: song.artist_id,
                       artistSlug: artistData?.slug,
                       albumId: song.album_id,
+                      albumSlug: supabaseAlbum.slug,
                       albumName: song.album_name,
                       coverImage: song.cover_url || supabaseAlbum.cover_url || '/images/default-album.png',
                       audioUrl: song.audio_url,
