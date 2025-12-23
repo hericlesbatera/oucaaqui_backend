@@ -274,6 +274,7 @@ const HomeImproved = () => {
         // return () => {
         //     subscription.unsubscribe();
         // };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Carregar TOP CDS quando período muda
