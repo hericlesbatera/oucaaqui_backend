@@ -1,6 +1,5 @@
 {
   "name": "frontend",
-  // Alteração forçada para disparar deploy Railway em 22/12/2025
   "version": "0.1.0",
   "private": true,
   "dependencies": {
