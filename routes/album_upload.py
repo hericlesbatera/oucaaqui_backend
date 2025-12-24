@@ -163,10 +163,25 @@ async def upload_album(request: Request):
                     progress_module.update_progress(upload_id, 32, "zip_extraido")
                     await asyncio.sleep(0.1)
                 elif file_extension == '.rar':
-                    print(f"[UPLOAD] RAR format is not currently supported. Please use ZIP format instead.")
-                    raise HTTPException(status_code=400, detail="RAR format is currently not supported on this server. Please compress your files as ZIP instead.")
+                    print(f"[UPLOAD] Extracting RAR file (this may take a while)...")
+                    try:
+                        # Try using rarfile library with proper error handling
+                        rarfile.RarFile.strerror = True  # Better error messages
+                        progress_module.update_progress(upload_id, 20, "extraindo_rar")
+                        with rarfile.RarFile(album_zip_path) as rar_ref:
+                            # Verify RAR file is readable
+                            infolist = rar_ref.infolist()
+                            print(f"[UPLOAD] RAR file contains {len(infolist)} items")
+                            
+                            # Extract all files
+                            rar_ref.extractall(extract_dir)
+                            print(f"[UPLOAD] RAR extracted successfully to: {extract_dir}")
+                            progress_module.update_progress(upload_id, 35, "rar_extraido")
+                    except Exception as e:
+                        print(f"[UPLOAD] RAR extraction error: {e}")
+                        raise Exception(f"Failed to extract RAR file: {str(e)}")
                 else:
-                    raise HTTPException(status_code=400, detail="Unsupported file format. Please use ZIP.")
+                    raise HTTPException(status_code=400, detail="Unsupported file format. Please use ZIP or RAR.")
             except zipfile.BadZipFile as e:
                 print(f"Bad ZIP file: {e}")
                 raise HTTPException(status_code=400, detail="ZIP file is corrupted or invalid")
