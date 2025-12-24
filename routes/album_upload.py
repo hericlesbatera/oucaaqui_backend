@@ -165,6 +165,22 @@ async def upload_album(request: Request):
                 elif file_extension == '.rar':
                     print(f"[UPLOAD] Extracting RAR file (this may take a while)...")
                     try:
+                        # Check if unrar is available
+                        import subprocess
+                        result = subprocess.run(['which', 'unrar'], capture_output=True, text=True)
+                        unrar_path = result.stdout.strip() if result.returncode == 0 else None
+                        print(f"[UPLOAD] unrar path: {unrar_path}")
+                        
+                        if not unrar_path:
+                            # Try /usr/local/bin/unrar (where we compiled it)
+                            import os as os_module
+                            if os_module.path.exists('/usr/local/bin/unrar'):
+                                unrar_path = '/usr/local/bin/unrar'
+                                print(f"[UPLOAD] Found unrar at: {unrar_path}")
+                                rarfile.UNRAR_TOOL = unrar_path
+                            else:
+                                raise Exception("unrar not found in PATH or /usr/local/bin/")
+                        
                         # Try using rarfile library with proper error handling
                         rarfile.RarFile.strerror = True  # Better error messages
                         progress_module.update_progress(upload_id, 20, "extraindo_rar")
