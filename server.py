@@ -15,13 +15,7 @@ app = FastAPI()
 # Adicionar CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://web-production-4b0ad.up.railway.app",
-        "https://musicasua.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5000",
-        "https://frontend-fixer-17.preview.emergentagent.com"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
