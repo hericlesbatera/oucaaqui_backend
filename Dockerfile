@@ -8,7 +8,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install unrar from source (since it's not in Debian main)
-RUN apt-get update && apt-get install -y wget ca-certificates && \
+RUN apt-get update && apt-get install -y wget ca-certificates build-essential && \
     cd /tmp && \
     wget https://www.rarlab.com/rar/unrarsrc-6.2.12.tar.gz && \
     tar -xzf unrarsrc-6.2.12.tar.gz && \
@@ -16,7 +16,8 @@ RUN apt-get update && apt-get install -y wget ca-certificates && \
     make -f makefile && \
     cp unrar /usr/local/bin/ && \
     cd / && rm -rf /tmp/unrar* && \
-    apt-get remove -y wget && \
+    apt-get remove -y wget build-essential && \
+    apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
