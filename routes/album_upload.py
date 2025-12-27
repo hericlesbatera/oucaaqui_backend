@@ -9,6 +9,7 @@ import unicodedata
 import re
 from typing import Optional
 from pathlib import Path
+from datetime import datetime, timezone
 from supabase import create_client
 from dotenv import load_dotenv
 import jwt
@@ -50,6 +51,23 @@ def sanitize_filename(filename: str) -> str:
     clean = re.sub(r'\s+', '_', clean)
     
     return clean
+
+def extract_youtube_video_id(url: str) -> Optional[str]:
+    """
+    Extract video ID from YouTube URL.
+    Supports: youtu.be/xxx, youtube.com/watch?v=xxx, youtube.com/embed/xxx
+    Returns: video_id (11 chars) or None if invalid
+    """
+    if not url:
+        return None
+    
+    pattern = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*'
+    match = re.match(pattern, url)
+    
+    if match and len(match.group(2)) == 11:
+        return match.group(2)
+    
+    return None
 
 @router.post("/upload")
 async def upload_album(request: Request):
@@ -93,6 +111,8 @@ async def upload_album(request: Request):
         if cover_image_file:
             print(f"[UPLOAD] coverImage filename: {getattr(cover_image_file, 'filename', 'N/A')}")
             print(f"[UPLOAD] coverImage content_type: {getattr(cover_image_file, 'content_type', 'N/A')}")
+        
+        print(f"[UPLOAD] YouTube URL received: {youtube_url}")
         
         if not album_file:
             raise HTTPException(status_code=400, detail="albumFile is required")
@@ -322,7 +342,6 @@ async def upload_album(request: Request):
                         scheduled_publish_at = scheduled_publish_at_str
                     
                     # Verificar se a data de agendamento já passou
-                    from datetime import datetime, timezone
                     now = datetime.now(timezone.utc)
                     scheduled_date = datetime.fromisoformat(scheduled_publish_at.replace('+00:00', '+00:00'))
                     
@@ -337,11 +356,11 @@ async def upload_album(request: Request):
                     scheduled_publish_at = f"{schedule_date}T{schedule_time}:00Z"
                     print(f"[UPLOAD] Album scheduled for (fallback): {scheduled_publish_at}")
             
-            from datetime import datetime, timezone
             published_at = None
             if not is_scheduled:
                 # Publicação imediata: published_at = agora
                 published_at = datetime.now(timezone.utc).isoformat()
+            
             album_data = {
                 "title": title,
                 "description": description,
@@ -396,6 +415,8 @@ async def upload_album(request: Request):
                 raise HTTPException(status_code=500, detail="Failed to get album ID from response")
             
             print(f"Album created with ID: {album_id}")
+            progress_module.update_progress(upload_id, 82, "album_criado")
+            await asyncio.sleep(0.1)
             
             # Now upload cover image to Supabase Storage with correct album_id
             cover_url = None
@@ -437,10 +458,85 @@ async def upload_album(request: Request):
                             print(f"[UPLOAD] Album updated with cover URL")
                 except Exception as e:
                     print(f"[UPLOAD] Error uploading cover: {e}")
+                    import traceback
+                    print(f"[UPLOAD] Cover upload traceback: {traceback.format_exc()}")
+            else:
+                print(f"[UPLOAD] No cover image data available")
+            
+            progress_module.update_progress(upload_id, 85, "capa_carregada")
+            await asyncio.sleep(0.1)
+            
+            # CREATE YOUTUBE VIDEO RECORD if youtube_url is provided
+            if youtube_url:
+                try:
+                    video_id = extract_youtube_video_id(youtube_url)
+                    if video_id:
+                        print(f"[UPLOAD] Processing YouTube video: {youtube_url}")
+                        print(f"[UPLOAD] Extracted video ID: {video_id}")
+                        
+                        # Get YouTube thumbnail
+                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+                        
+                        # Get YouTube video title
+                        video_title = title  # Default to album title
+                        try:
+                            async with httpx.AsyncClient(timeout=10.0) as client:
+                                oembed_response = await client.get(
+                                    f"https://www.youtube.com/oembed?url={youtube_url}&format=json"
+                                )
+                                if oembed_response.status_code == 200:
+                                    oembed_data = oembed_response.json()
+                                    video_title = oembed_data.get("title", title)
+                                    print(f"[UPLOAD] YouTube title fetched: {video_title}")
+                        except Exception as e:
+                            print(f"[UPLOAD] Could not fetch YouTube title: {e}")
+                        
+                        # Create artist_videos record
+                        video_data = {
+                            "artist_id": user_id,
+                            "album_id": album_id,
+                            "video_url": youtube_url,
+                            "video_id": video_id,
+                            "title": video_title,
+                            "thumbnail": thumbnail_url,
+                            "is_public": is_public,  # Se álbum é público, vídeo é público
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }
+                        
+                        print(f"[UPLOAD] Creating video record: {video_data}")
+                        try:
+                            video_response = supabase.table("artist_videos").insert(video_data).execute()
+                            print(f"[UPLOAD] Video response: {video_response}")
+                            if hasattr(video_response, 'data') and video_response.data:
+                                print(f"[UPLOAD] Video record created successfully with ID: {video_response.data[0].get('id')}")
+                            else:
+                                print(f"[UPLOAD] Warning: Video response had no data")
+                        except Exception as e:
+                            print(f"[UPLOAD] Error creating video record: {e}")
+                            import traceback
+                            print(f"[UPLOAD] Video creation traceback: {traceback.format_exc()}")
+                            # Não falhar o upload se o vídeo não for criado
+                    else:
+                        print(f"[UPLOAD] Invalid YouTube URL format: {youtube_url}")
+                except Exception as e:
+                    print(f"[UPLOAD] Error processing YouTube URL: {e}")
+                    import traceback
+                    print(f"[UPLOAD] YouTube processing traceback: {traceback.format_exc()}")
+                    # Não falhar o upload se houve erro processando vídeo
+            
+            progress_module.update_progress(upload_id, 87, "video_youtube_criado")
+            await asyncio.sleep(0.1)
             
             # Upload MP3 files and create song records
             progress_module.update_progress(upload_id, 40, "iniciando_upload_musicas")
             await asyncio.sleep(0.1)
+            
+            # Log cover_url status
+            if cover_url:
+                print(f"[UPLOAD] Cover successfully uploaded and will be used: {cover_url}")
+            else:
+                print(f"[UPLOAD] WARNING: No cover URL available for songs in this album")
+            
             songs_created = []
             total_songs = len(mp3_files)
             for idx, mp3_file in enumerate(sorted(mp3_files), 1):
@@ -522,7 +618,7 @@ async def upload_album(request: Request):
                         "artist_name": artist_name,
                         "album_name": title,
                         "audio_url": audio_url,
-                        "cover_url": cover_url,
+                        "cover_url": cover_url,  # Use the album cover for each song
                         "duration": 0,  # TODO: Extract duration from MP3
                         "track_number": idx,
                         "genre": genre if genre else None,
