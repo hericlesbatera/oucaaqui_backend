@@ -9,7 +9,7 @@ from routes.cleanup import router as cleanup_router
 from routes.music_files import router as music_files_router
 from routes.album_download import router as album_download_router
 from routes.admin import router as admin_router
-from routes import auth as auth_router
+from routes.auth import router as auth_router
 
 app = FastAPI()
 
@@ -33,7 +33,7 @@ app.include_router(cleanup_router, prefix="/api")
 app.include_router(music_files_router, prefix="/api")
 app.include_router(album_download_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
-app.include_router(auth_router.router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 @app.get("/health")
 def health_check():
