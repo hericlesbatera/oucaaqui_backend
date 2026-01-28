@@ -375,28 +375,35 @@ const AuthModal = ({ isOpen, onClose }) => {
 
             if (authError) throw authError;
 
-            // Se for artista, criar perfil na tabela artists
-            if (userType === 'artist' && authData?.user?.id) {
+            // Criar perfil na tabela artists para TODOS os usuários
+            // Isso garante que o perfil exista mesmo para usuários comuns que podem se tornar artistas depois
+            if (authData?.user?.id) {
+                const artistData = {
+                    id: authData.user.id,
+                    name: userType === 'artist' ? artistName : signupName,
+                    slug: userType === 'artist' ? artistSlug : slugify(signupName),
+                    email: signupEmail,
+                    cidade: userType === 'artist' ? artistCidade : '',
+                    estado: userType === 'artist' ? artistEstado : '',
+                    genero: userType === 'artist' ? artistGenero : '',
+                    estilo_musical: userType === 'artist' ? artistEstiloMusical : '',
+                    bio: '',
+                    avatar_url: '',
+                    cover_url: '',
+                    followers_count: 0,
+                    is_verified: false
+                };
+
                 const { error: profileError } = await supabase
                     .from('artists')
-                    .insert({
-                        id: authData.user.id,
-                        name: artistName,
-                        slug: artistSlug,
-                        email: signupEmail,
-                        cidade: artistCidade,
-                        estado: artistEstado,
-                        genero: artistGenero,
-                        estilo_musical: artistEstiloMusical,
-                        bio: '',
-                        avatar_url: '',
-                        cover_url: '',
-                        followers_count: 0,
-                        is_verified: false
-                    });
+                    .insert(artistData);
 
                 if (profileError) {
-                    console.error('Erro ao criar perfil:', profileError);
+                    console.error('Erro ao criar perfil do artista:', profileError);
+                    // Não falhar o cadastro se o perfil não puder ser criado
+                    // O perfil pode ser criado depois quando o usuário acessar as configurações
+                } else {
+                    console.log('Perfil do artista criado com sucesso:', authData.user.id);
                 }
             }
 
