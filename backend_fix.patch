@@ -1,0 +1,48 @@
+diff --git a/routes/album_upload.py b/routes/album_upload.py
+index 634283d..ad31e8d 100644
+--- a/routes/album_upload.py
++++ b/routes/album_upload.py
+@@ -437,25 +437,34 @@ async def upload_album(request: Request):
+                     }
+                     mime_type = mime_types.get(cover_file_ext, 'image/jpeg')
+                     
+-                    # Use httpx directly with proper headers
+-                    async with httpx.AsyncClient() as client:
++                    # Use httpx directly with proper headers - use PUT for upsert behavior
++                    async with httpx.AsyncClient(timeout=60.0) as client:
+                         upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
+                         headers = {
+                             "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+-                            "Content-Type": mime_type
++                            "Content-Type": mime_type,
++                            "x-upsert": "true"  # Allow overwriting existing files
+                         }
++                        # Try POST first, if file exists (409), use PUT
+                         response = await client.post(upload_url, content=cover_data, headers=headers)
++                        if response.status_code == 409:  # File already exists
++                            print(f"[UPLOAD] Cover file exists, updating with PUT...")
++                            response = await client.put(upload_url, content=cover_data, headers=headers)
++                        
+                         if response.status_code not in [200, 201]:
+-                            print(f"[UPLOAD] Cover upload error: {response.text}")
++                            print(f"[UPLOAD] Cover upload error: {response.status_code} - {response.text}")
+                         else:
+                             cover_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
+-                            print(f"[UPLOAD] Cover uploaded: {cover_url}")
++                            print(f"[UPLOAD] Cover uploaded successfully: {cover_url}")
+                             
+                             # Update album with cover URL
+-                            supabase.table("albums").update({
+-                                "cover_url": cover_url
+-                            }).eq("id", album_id).execute()
+-                            print(f"[UPLOAD] Album updated with cover URL")
++                            try:
++                                update_result = supabase.table("albums").update({
++                                    "cover_url": cover_url
++                                }).eq("id", album_id).execute()
++                                print(f"[UPLOAD] Album cover_url update result: {update_result.data}")
++                            except Exception as update_err:
++                                print(f"[UPLOAD] Error updating album cover_url: {update_err}")
+                 except Exception as e:
+                     print(f"[UPLOAD] Error uploading cover: {e}")
+                     import traceback
