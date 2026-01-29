@@ -475,36 +475,39 @@ async def upload_album(request: Request):
                             print(f"[UPLOAD] Cover uploaded successfully: {cover_url}")
                             print(f"[UPLOAD] Album ID for cover update: {album_id} (type: {type(album_id)})")
                             
-                            # Update album with cover URL
+                            # Update album with cover URL usando httpx direto para bypass de RLS
                             try:
                                 album_id_str = str(album_id)
                                 print(f"[UPLOAD] Updating album {album_id_str} with cover_url: {cover_url}")
                                 
-                                # Usar RPC ou update direto com o ID correto
-                                update_result = supabase.table("albums").update({
-                                    "cover_url": cover_url
-                                }).eq("id", album_id_str).execute()
-                                
-                                print(f"[UPLOAD] Album cover_url update result: {update_result}")
-                                print(f"[UPLOAD] Update result data: {update_result.data if hasattr(update_result, 'data') else 'N/A'}")
-                                print(f"[UPLOAD] Update result count: {update_result.count if hasattr(update_result, 'count') else 'N/A'}")
+                                # Usar httpx diretamente para garantir que o update funcione
+                                async with httpx.AsyncClient(timeout=30.0) as client:
+                                    update_url = f"{SUPABASE_URL}/rest/v1/albums?id=eq.{album_id_str}"
+                                    headers = {
+                                        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                                        "apikey": SUPABASE_SERVICE_KEY,
+                                        "Content-Type": "application/json",
+                                        "Prefer": "return=representation"
+                                    }
+                                    update_data = {"cover_url": cover_url}
+                                    
+                                    response = await client.patch(update_url, json=update_data, headers=headers)
+                                    print(f"[UPLOAD] Direct PATCH response status: {response.status_code}")
+                                    print(f"[UPLOAD] Direct PATCH response: {response.text}")
+                                    
+                                    if response.status_code == 200:
+                                        result_data = response.json()
+                                        if result_data and len(result_data) > 0:
+                                            print(f"[UPLOAD] SUCCESS: cover_url updated via direct PATCH!")
+                                        else:
+                                            print(f"[UPLOAD] WARNING: PATCH returned empty array")
+                                    else:
+                                        print(f"[UPLOAD] ERROR: PATCH failed with status {response.status_code}")
                                 
                                 # Verificar se realmente atualizou
                                 verify = supabase.table("albums").select("id, cover_url").eq("id", album_id_str).execute()
                                 print(f"[UPLOAD] Album verification after update: {verify.data}")
                                 
-                                if verify.data and len(verify.data) > 0:
-                                    saved_cover = verify.data[0].get("cover_url")
-                                    if saved_cover == cover_url:
-                                        print(f"[UPLOAD] SUCCESS: cover_url confirmed in database!")
-                                    else:
-                                        print(f"[UPLOAD] MISMATCH: Expected {cover_url}, got {saved_cover}")
-                                        # Tentar update novamente
-                                        retry = supabase.table("albums").update({"cover_url": cover_url}).eq("id", album_id_str).execute()
-                                        print(f"[UPLOAD] Retry update result: {retry.data}")
-                                else:
-                                    print(f"[UPLOAD] ERROR: Album {album_id_str} not found in database!")
-                                    
                             except Exception as update_err:
                                 print(f"[UPLOAD] Error updating album cover_url: {update_err}")
                                 import traceback
