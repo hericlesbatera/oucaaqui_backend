@@ -378,6 +378,46 @@ async def upload_album(request: Request):
                 # Publicação imediata: published_at = agora
                 published_at = datetime.now(timezone.utc).isoformat()
             
+            # Upload da capa ANTES de criar o álbum para já ter o cover_url no insert
+            cover_url = None
+            if cover_data:
+                try:
+                    safe_album_slug = sanitize_filename(album_slug)
+                    cover_filename = f"albums/{safe_album_slug}/cover.jpg"
+                    
+                    mime_types = {
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'png': 'image/png',
+                        'gif': 'image/gif',
+                        'webp': 'image/webp'
+                    }
+                    mime_type = mime_types.get(cover_file_ext, 'image/jpeg')
+                    
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
+                        headers = {
+                            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                            "Content-Type": mime_type,
+                            "x-upsert": "true"
+                        }
+                        response = await client.post(upload_url, content=cover_data, headers=headers)
+                        if response.status_code == 409:
+                            print(f"[UPLOAD] Cover file exists, updating with PUT...")
+                            response = await client.put(upload_url, content=cover_data, headers=headers)
+                        
+                        if response.status_code not in [200, 201]:
+                            print(f"[UPLOAD] Cover upload error: {response.status_code} - {response.text}")
+                        else:
+                            cover_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
+                            print(f"[UPLOAD] Cover uploaded BEFORE album creation: {cover_url}")
+                except Exception as e:
+                    print(f"[UPLOAD] Error uploading cover before album creation: {e}")
+                    import traceback
+                    print(f"[UPLOAD] Cover upload traceback: {traceback.format_exc()}")
+            else:
+                print(f"[UPLOAD] No cover image data available for pre-upload")
+            
             album_data = {
                 "title": title,
                 "description": description,
@@ -386,12 +426,12 @@ async def upload_album(request: Request):
                 "slug": album_slug,
                 "artist_id": user_id,
                 "artist_name": artist_name,
-                "cover_url": None,  # Will be updated after cover upload
-                "is_private": not is_public,  # Privado se is_public=false, público se is_public=true
-                "is_scheduled": True if is_scheduled else False,  # Explicitly ensure boolean
-                "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,  # Limpar se não é mais agendado
+                "cover_url": cover_url,  # JÁ PREENCHIDO com a URL da capa
+                "is_private": not is_public,
+                "is_scheduled": True if is_scheduled else False,
+                "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,
                 "published_at": published_at,
-                "release_date": release_date,  # Salvar a data completa
+                "release_date": release_date,
                 "release_year": release_date[:4] if release_date else None
             }
             
@@ -431,95 +471,8 @@ async def upload_album(request: Request):
             if not album_id:
                 raise HTTPException(status_code=500, detail="Failed to get album ID from response")
             
-            print(f"Album created with ID: {album_id}")
-            progress_module.update_progress(upload_id, 82, "album_criado")
-            await asyncio.sleep(0.1)
-            
-            # Now upload cover image to Supabase Storage with correct album_id
-            cover_url = None
-            if cover_data:
-                try:
-                    # Sanitize user_id in path - cover is stored per album using album_id
-                    safe_user_id = sanitize_filename(str(user_id))
-                    safe_album_id = sanitize_filename(str(album_id))
-                    cover_filename = f"albums/{safe_album_id}/cover.jpg"
-                    
-                    # Determine MIME type based on file extension
-                    mime_types = {
-                        'jpg': 'image/jpeg',
-                        'jpeg': 'image/jpeg',
-                        'png': 'image/png',
-                        'gif': 'image/gif',
-                        'webp': 'image/webp'
-                    }
-                    mime_type = mime_types.get(cover_file_ext, 'image/jpeg')
-                    
-                    # Use httpx directly with proper headers - use PUT for upsert behavior
-                    async with httpx.AsyncClient(timeout=60.0) as client:
-                        upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
-                        headers = {
-                            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-                            "Content-Type": mime_type,
-                            "x-upsert": "true"  # Allow overwriting existing files
-                        }
-                        # Try POST first, if file exists (409), use PUT
-                        response = await client.post(upload_url, content=cover_data, headers=headers)
-                        if response.status_code == 409:  # File already exists
-                            print(f"[UPLOAD] Cover file exists, updating with PUT...")
-                            response = await client.put(upload_url, content=cover_data, headers=headers)
-                        
-                        if response.status_code not in [200, 201]:
-                            print(f"[UPLOAD] Cover upload error: {response.status_code} - {response.text}")
-                        else:
-                            cover_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
-                            print(f"[UPLOAD] Cover uploaded successfully: {cover_url}")
-                            print(f"[UPLOAD] Album ID for cover update: {album_id} (type: {type(album_id)})")
-                            
-                            # Update album with cover URL usando httpx direto para bypass de RLS
-                            try:
-                                album_id_str = str(album_id)
-                                print(f"[UPLOAD] Updating album {album_id_str} with cover_url: {cover_url}")
-                                
-                                # Usar httpx diretamente para garantir que o update funcione
-                                async with httpx.AsyncClient(timeout=30.0) as client:
-                                    update_url = f"{SUPABASE_URL}/rest/v1/albums?id=eq.{album_id_str}"
-                                    headers = {
-                                        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-                                        "apikey": SUPABASE_SERVICE_KEY,
-                                        "Content-Type": "application/json",
-                                        "Prefer": "return=representation"
-                                    }
-                                    update_data = {"cover_url": cover_url}
-                                    
-                                    response = await client.patch(update_url, json=update_data, headers=headers)
-                                    print(f"[UPLOAD] Direct PATCH response status: {response.status_code}")
-                                    print(f"[UPLOAD] Direct PATCH response: {response.text}")
-                                    
-                                    if response.status_code == 200:
-                                        result_data = response.json()
-                                        if result_data and len(result_data) > 0:
-                                            print(f"[UPLOAD] SUCCESS: cover_url updated via direct PATCH!")
-                                        else:
-                                            print(f"[UPLOAD] WARNING: PATCH returned empty array")
-                                    else:
-                                        print(f"[UPLOAD] ERROR: PATCH failed with status {response.status_code}")
-                                
-                                # Verificar se realmente atualizou
-                                verify = supabase.table("albums").select("id, cover_url").eq("id", album_id_str).execute()
-                                print(f"[UPLOAD] Album verification after update: {verify.data}")
-                                
-                            except Exception as update_err:
-                                print(f"[UPLOAD] Error updating album cover_url: {update_err}")
-                                import traceback
-                                print(f"[UPLOAD] Update error traceback: {traceback.format_exc()}")
-                except Exception as e:
-                    print(f"[UPLOAD] Error uploading cover: {e}")
-                    import traceback
-                    print(f"[UPLOAD] Cover upload traceback: {traceback.format_exc()}")
-            else:
-                print(f"[UPLOAD] No cover image data available")
-            
-            progress_module.update_progress(upload_id, 85, "capa_carregada")
+            print(f"Album created with ID: {album_id}, cover_url: {cover_url}")
+            progress_module.update_progress(upload_id, 85, "album_criado")
             await asyncio.sleep(0.1)
             
             # CREATE YOUTUBE VIDEO RECORD if youtube_url is provided
