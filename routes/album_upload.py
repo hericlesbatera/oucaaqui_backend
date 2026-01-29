@@ -501,6 +501,9 @@ async def upload_album(request: Request):
                             print(f"[UPLOAD] Could not fetch YouTube title: {e}")
                         
                         # Create artist_videos record
+                        # Vídeos de álbum sempre são públicos e aparecem em ambos:
+                        # - "Vídeos no CD" (porque tem album_id)
+                        # - "Vídeos no Perfil" (porque is_public = true)
                         video_data = {
                             "artist_id": user_id,
                             "album_id": album_id,
@@ -508,7 +511,7 @@ async def upload_album(request: Request):
                             "video_id": video_id,
                             "title": video_title,
                             "thumbnail": thumbnail_url,
-                            "is_public": is_public,  # Se álbum é público, vídeo é público
+                            "is_public": True,  # Sempre público para aparecer em Vídeos no Perfil também
                             "created_at": datetime.now(timezone.utc).isoformat()
                         }
                         
