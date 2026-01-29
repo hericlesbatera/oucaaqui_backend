@@ -1,0 +1,777 @@
+from fastapi import APIRouter, HTTPException, Request
+import os
+import uuid
+import json
+import asyncio
+import zipfile
+import shutil
+import unicodedata
+import re
+from typing import Optional
+from pathlib import Path
+from datetime import datetime, timezone
+from supabase import create_client
+from dotenv import load_dotenv
+import jwt
+import rarfile
+import httpx
+from io import BytesIO
+from . import upload_progress as progress_module
+from . import auth_utils
+
+load_dotenv()
+
+# Initialize Supabase client
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+router = APIRouter(prefix="/album-upload", tags=["album-upload"])
+
+# Global state for upload progress tracking
+upload_progress = {}
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename for Supabase Storage (remove accents, special chars).
+    Converts "Música.mp3" -> "Musica.mp3"
+    """
+    # Remove accents
+    nfd = unicodedata.normalize('NFD', filename)
+    clean = ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
+    
+    # Remove other special characters (keep only alphanumeric, dots, hyphens, underscores)
+    clean = re.sub(r'[^\w\s.-]', '', clean)
+    
+    # Replace spaces with underscores or hyphens
+    clean = re.sub(r'\s+', '_', clean)
+    
+    return clean
+
+def extract_youtube_video_id(url: str) -> Optional[str]:
+    """
+    Extract video ID from YouTube URL.
+    Supports: youtu.be/xxx, youtube.com/watch?v=xxx, youtube.com/embed/xxx
+    Returns: video_id (11 chars) or None if invalid
+    """
+    if not url:
+        return None
+    
+    pattern = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*'
+    match = re.match(pattern, url)
+    
+    if match and len(match.group(2)) == 11:
+        return match.group(2)
+    
+    return None
+
+@router.post("/upload")
+async def upload_album(request: Request):
+    """
+    Upload a new album with all metadata.
+    Extracts ZIP, uploads files to Supabase Storage, and saves metadata.
+    """
+    try:
+        # Parse form data
+        form_data = await request.form()
+        
+        print(f"Form data keys: {list(form_data.keys())}")
+        
+        # Extract form fields
+        title = form_data.get("title", "")
+        description = form_data.get("description", "")
+        genre = form_data.get("genre", "")
+        tags_str = form_data.get("tags", "[]")
+        is_public = form_data.get("isPublic", "true").lower() == "true"
+        publish_type = form_data.get("publishType", "immediate")
+        scheduled_publish_at_str = form_data.get("scheduledPublishAt", "")
+        # Fallback para campos antigos (scheduleDate e scheduleTime)
+        schedule_date = form_data.get("scheduleDate", "")
+        schedule_time = form_data.get("scheduleTime", "")
+        print(f"[UPLOAD] publish_type: {publish_type}, scheduled_publish_at: {scheduled_publish_at_str}")
+        release_date = form_data.get("releaseDate")
+        custom_url = form_data.get("customUrl", "").lower().replace(" ", "-") if form_data.get("customUrl") else None
+        youtube_url = form_data.get("youtubeUrl")
+        song_metadata_str = form_data.get("songMetadata", "{}")
+        collaborators_str = form_data.get("collaborators", "[]")
+        artist_id = form_data.get("artistId")
+        artist_name = form_data.get("artistName", "")
+        auth_header = request.headers.get("Authorization")
+        
+        # Get files
+        cover_image_file = form_data.get("coverImage")
+        album_file = form_data.get("albumFile")
+        
+        print(f"[UPLOAD] coverImage received: {cover_image_file}")
+        print(f"[UPLOAD] coverImage type: {type(cover_image_file)}")
+        if cover_image_file:
+            print(f"[UPLOAD] coverImage filename: {getattr(cover_image_file, 'filename', 'N/A')}")
+            print(f"[UPLOAD] coverImage content_type: {getattr(cover_image_file, 'content_type', 'N/A')}")
+        
+        print(f"[UPLOAD] YouTube URL received: {youtube_url}")
+        
+        if not album_file:
+            raise HTTPException(status_code=400, detail="albumFile is required")
+        
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Authorization header required")
+        
+        # Extract user ID from token
+        token = auth_header.replace("Bearer ", "").strip()
+        try:
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            user_id = decoded.get("sub")
+        except Exception as e:
+            print(f"Error decoding token: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not extract user from token")
+        
+        # Use uploadId from frontend if provided, otherwise generate new one
+        upload_id = form_data.get("uploadId") or str(uuid.uuid4())
+        print(f"[UPLOAD] Upload ID: {upload_id}")
+        
+        # Initialize progress tracking (update_progress will handle initialization)
+        progress_module.update_progress(upload_id, 0, "iniciando_upload")
+        
+        # Skip connection test - upload will fail directly if there's an issue
+        print(f"[UPLOAD] Supabase connection configured.")
+        progress_module.update_progress(upload_id, 5, "conexao_verificada")
+        
+        # Create working directory
+        temp_dir = Path(__file__).parent.parent / "uploads" / upload_id
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            progress_module.update_progress(upload_id, 1, "lendo_arquivo")
+            await asyncio.sleep(0.1)
+            print(f"[UPLOAD] Starting file processing...")
+            
+            # IMPORTANTE: Ler a capa ANTES de processar o ZIP para evitar problemas de stream
+            cover_data = None
+            cover_file_ext = None
+            if cover_image_file:
+                try:
+                    cover_data = await cover_image_file.read()
+                    cover_file_ext = cover_image_file.filename.lower().split('.')[-1] if cover_image_file.filename else 'jpg'
+                    print(f"[UPLOAD] Cover image read from form EARLY: {len(cover_data) if cover_data else 0} bytes, ext: {cover_file_ext}")
+                    # Se leu 0 bytes, marcar como None para usar fallback
+                    if cover_data and len(cover_data) == 0:
+                        print(f"[UPLOAD] WARNING: Cover image has 0 bytes, will try fallback")
+                        cover_data = None
+                except Exception as e:
+                    print(f"[UPLOAD] Error reading cover from form: {e}")
+                    import traceback
+                    print(f"[UPLOAD] Cover read traceback: {traceback.format_exc()}")
+            else:
+                print(f"[UPLOAD] No cover_image_file provided in form data")
+            
+            # Save and extract ZIP file
+            album_zip_path = temp_dir / f"{album_file.filename}"
+            print(f"[UPLOAD] Reading file contents...")
+            progress_module.update_progress(upload_id, 5, "extraindo_arquivo")
+            await asyncio.sleep(0.1)
+            contents = await album_file.read()
+            
+            print(f"[UPLOAD] Writing file to disk...")
+            with open(album_zip_path, "wb") as f:
+                f.write(contents)
+            
+            print(f"[UPLOAD] File saved: {album_zip_path}")
+            print(f"[UPLOAD] File size: {os.path.getsize(album_zip_path)} bytes")
+            
+            # Extract archive
+            extract_dir = temp_dir / "extracted"
+            extract_dir.mkdir(exist_ok=True)
+            
+            file_extension = album_zip_path.suffix.lower()
+            
+            try:
+                if file_extension == '.zip':
+                    print(f"[UPLOAD] Extracting ZIP file...")
+                    progress_module.update_progress(upload_id, 15, "extraindo_zip")
+                    await asyncio.sleep(0.1)
+                    with zipfile.ZipFile(album_zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_dir)
+                    print(f"[UPLOAD] ZIP extracted successfully to: {extract_dir}")
+                    progress_module.update_progress(upload_id, 32, "zip_extraido")
+                    await asyncio.sleep(0.1)
+                elif file_extension == '.rar':
+                    print(f"[UPLOAD] Extracting RAR file (this may take a while)...")
+                    try:
+                        # Check if unrar is available
+                        import subprocess
+                        result = subprocess.run(['which', 'unrar'], capture_output=True, text=True)
+                        unrar_path = result.stdout.strip() if result.returncode == 0 else None
+                        print(f"[UPLOAD] unrar path: {unrar_path}")
+                        
+                        if not unrar_path:
+                            # Try /usr/local/bin/unrar (where we compiled it)
+                            import os as os_module
+                            if os_module.path.exists('/usr/local/bin/unrar'):
+                                unrar_path = '/usr/local/bin/unrar'
+                                print(f"[UPLOAD] Found unrar at: {unrar_path}")
+                                rarfile.UNRAR_TOOL = unrar_path
+                            else:
+                                raise Exception("unrar not found in PATH or /usr/local/bin/")
+                        
+                        # Try using rarfile library with proper error handling
+                        rarfile.RarFile.strerror = True  # Better error messages
+                        progress_module.update_progress(upload_id, 20, "extraindo_rar")
+                        with rarfile.RarFile(album_zip_path) as rar_ref:
+                            # Verify RAR file is readable
+                            infolist = rar_ref.infolist()
+                            print(f"[UPLOAD] RAR file contains {len(infolist)} items")
+                            
+                            # Extract all files
+                            rar_ref.extractall(extract_dir)
+                            print(f"[UPLOAD] RAR extracted successfully to: {extract_dir}")
+                            progress_module.update_progress(upload_id, 35, "rar_extraido")
+                    except Exception as e:
+                        print(f"[UPLOAD] RAR extraction error: {e}")
+                        raise Exception(f"Failed to extract RAR file: {str(e)}")
+                else:
+                    raise HTTPException(status_code=400, detail="Unsupported file format. Please use ZIP or RAR.")
+            except zipfile.BadZipFile as e:
+                print(f"Bad ZIP file: {e}")
+                raise HTTPException(status_code=400, detail="ZIP file is corrupted or invalid")
+            except rarfile.BadRarFile as e:
+                print(f"Bad RAR file: {e}")
+                raise HTTPException(status_code=400, detail="RAR file is corrupted or invalid")
+            except Exception as e:
+                import traceback
+                print(f"Error extracting archive: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=400, detail=f"Error extracting archive: {str(e)}")
+            
+            print(f"[UPLOAD] Listing extracted files...")
+            # List all files in extracted directory
+            all_files = list(extract_dir.rglob("*"))
+            print(f"[UPLOAD] Total items found: {len(all_files)}")
+            for i, f in enumerate(all_files[:50]):
+                print(f"[UPLOAD]   {i+1}. {f.name} ({f.suffix})")
+            
+            # Find all MP3 files (case-insensitive)
+            print(f"[UPLOAD] Searching for MP3 files...")
+            mp3_files = []
+            for file_path in all_files:
+                if file_path.is_file():
+                    if file_path.suffix.lower() in ['.mp3', '.m4a', '.wav', '.flac', '.ogg']:
+                        mp3_files.append(file_path)
+                        print(f"[UPLOAD]   Found audio file: {file_path.name}")
+            
+            print(f"[UPLOAD] Found {len(mp3_files)} audio files")
+            progress_module.update_progress(upload_id, 35, "arquivos_encontrados")
+            await asyncio.sleep(0.1)
+            
+            if not mp3_files:
+                print(f"WARNING: No audio files found in archive!")
+                progress_module.update_progress(upload_id, 0, "erro_nenhum_audio")
+                raise HTTPException(status_code=400, detail="Nenhum arquivo de áudio (MP3, M4A, WAV, FLAC, OGG) encontrado no arquivo. Verifique o conteúdo do ZIP/RAR.")
+            
+            # Parse metadata
+            try:
+                song_metadata = json.loads(song_metadata_str)
+                collaborator_ids = json.loads(collaborators_str) if collaborators_str else []
+                tags = json.loads(tags_str) if tags_str else []
+            except Exception as e:
+                print(f"Error parsing metadata: {e}")
+                song_metadata = {}
+                collaborator_ids = []
+                tags = []
+            
+            # Fallback: try to find cover image inside the extracted archive (se não veio no form)
+            if not cover_data:
+                print(f"[UPLOAD] No cover from form, searching in archive...")
+                image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+                cover_names = ['cover', 'capa', 'folder', 'front', 'artwork', 'album']
+                
+                for file_path in all_files:
+                    if file_path.is_file() and file_path.suffix.lower() in image_extensions:
+                        file_name_lower = file_path.stem.lower()
+                        # Check if filename matches common cover names
+                        if any(name in file_name_lower for name in cover_names):
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    cover_data = f.read()
+                                cover_file_ext = file_path.suffix.lower().lstrip('.')
+                                print(f"[UPLOAD] Cover found in archive: {file_path.name} ({len(cover_data)} bytes)")
+                                break
+                            except Exception as e:
+                                print(f"[UPLOAD] Error reading cover from archive: {e}")
+                
+                # If still no cover, use the first image found
+                if not cover_data:
+                    for file_path in all_files:
+                        if file_path.is_file() and file_path.suffix.lower() in image_extensions:
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    cover_data = f.read()
+                                cover_file_ext = file_path.suffix.lower().lstrip('.')
+                                print(f"[UPLOAD] Using first image as cover: {file_path.name} ({len(cover_data)} bytes)")
+                                break
+                            except Exception as e:
+                                print(f"[UPLOAD] Error reading image: {e}")
+            
+            # Create album record in Supabase
+            # Generate unique slug: if custom_url provided use it, otherwise use title + full uuid
+            if custom_url:
+                album_slug = custom_url
+            else:
+                base_slug = title.lower().replace(" ", "-").replace(".", "").replace(",", "")[:30]
+                # Add full uuid to ensure uniqueness
+                slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
+                album_slug = f"{base_slug}-{slug_suffix}"
+            
+            # Handle scheduled publishing
+            is_scheduled = publish_type == "scheduled"
+            scheduled_publish_at = None
+            should_publish_now = False  # Flag para publicar imediatamente
+            
+            if is_scheduled:
+                # Usar o novo formato (scheduledPublishAt como ISO string)
+                if scheduled_publish_at_str:
+                    # Remover .000Z ou .xxxZ e manter só o que precisa
+                    # Frontend envia: "2025-12-18T05:00:00.000Z"
+                    # Converter para: "2025-12-18T05:00:00+00:00" (formato PostgreSQL)
+                    if scheduled_publish_at_str.endswith('Z'):
+                        # Remover Z e adicionar +00:00
+                        base_datetime = scheduled_publish_at_str[:-1]  # Remove Z
+                        # Se tem milissegundos, remover
+                        if '.' in base_datetime:
+                            base_datetime = base_datetime.split('.')[0]
+                        scheduled_publish_at = f"{base_datetime}+00:00"
+                    else:
+                        scheduled_publish_at = scheduled_publish_at_str
+                    
+                    # Verificar se a data de agendamento já passou
+                    now = datetime.now(timezone.utc)
+                    scheduled_date = datetime.fromisoformat(scheduled_publish_at.replace('+00:00', '+00:00'))
+                    
+                    if scheduled_date <= now:
+                        print(f"[UPLOAD] Data de agendamento ({scheduled_publish_at}) já passou. Publicando imediatamente!")
+                        should_publish_now = True
+                        is_scheduled = False  # Não marcar como agendado
+                    else:
+                        print(f"[UPLOAD] Album scheduled for: {scheduled_publish_at}")
+                elif schedule_date and schedule_time:
+                    # Fallback para campos antigos
+                    scheduled_publish_at = f"{schedule_date}T{schedule_time}:00Z"
+                    print(f"[UPLOAD] Album scheduled for (fallback): {scheduled_publish_at}")
+            
+            published_at = None
+            if not is_scheduled:
+                # Publicação imediata: published_at = agora
+                published_at = datetime.now(timezone.utc).isoformat()
+            
+            album_data = {
+                "title": title,
+                "description": description,
+                "genre": genre,
+                "tags": tags,
+                "slug": album_slug,
+                "artist_id": user_id,
+                "artist_name": artist_name,
+                "cover_url": None,  # Will be updated after cover upload
+                "is_private": not is_public,  # Privado se is_public=false, público se is_public=true
+                "is_scheduled": True if is_scheduled else False,  # Explicitly ensure boolean
+                "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,  # Limpar se não é mais agendado
+                "published_at": published_at,
+                "release_date": release_date,  # Salvar a data completa
+                "release_year": release_date[:4] if release_date else None
+            }
+            
+            # Insert album
+            progress_module.update_progress(upload_id, 80, "criando_album")
+            print(f"[UPLOAD] Inserting album into database...")
+            print(f"[UPLOAD] Album data: {album_data}")
+            try:
+                # Ensure artist exists before creating album
+                artist_created = auth_utils.ensure_artist_exists(user_id, artist_name)
+                print(f"[UPLOAD] Artist creation result: {artist_created}")
+                
+                # Verify artist exists before proceeding
+                artist_verify = supabase.table("artists").select("id, name").eq("id", user_id).execute()
+                print(f"[UPLOAD] Artist verification: {artist_verify.data}")
+                
+                if not artist_verify.data or len(artist_verify.data) == 0:
+                    print(f"[UPLOAD] WARNING: Artist {user_id} still not found after creation attempt")
+                
+                album_response = supabase.table("albums").insert(album_data).execute()
+                
+                print(f"[UPLOAD] Album response: {album_response}")
+                print(f"[UPLOAD] Album response data: {album_response.data if hasattr(album_response, 'data') else 'No data attribute'}")
+                
+                if not hasattr(album_response, 'data') or not album_response.data or len(album_response.data) == 0:
+                    raise Exception("No data returned from album insertion")
+            except Exception as db_error:
+                print(f"[UPLOAD] Database insertion error: {db_error}")
+                print(f"[UPLOAD] Error type: {type(db_error)}")
+                import traceback
+                print(f"[UPLOAD] Traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=f"Failed to create album in database: {str(db_error)}")
+            
+            album_record = album_response.data[0]
+            album_id = album_record.get("id") if isinstance(album_record, dict) else None
+            
+            if not album_id:
+                raise HTTPException(status_code=500, detail="Failed to get album ID from response")
+            
+            print(f"Album created with ID: {album_id}")
+            progress_module.update_progress(upload_id, 82, "album_criado")
+            await asyncio.sleep(0.1)
+            
+            # Now upload cover image to Supabase Storage with correct album_id
+            cover_url = None
+            if cover_data:
+                try:
+                    # Sanitize user_id in path - cover is stored per album using album_id
+                    safe_user_id = sanitize_filename(str(user_id))
+                    safe_album_id = sanitize_filename(str(album_id))
+                    cover_filename = f"albums/{safe_album_id}/cover.jpg"
+                    
+                    # Determine MIME type based on file extension
+                    mime_types = {
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg',
+                        'png': 'image/png',
+                        'gif': 'image/gif',
+                        'webp': 'image/webp'
+                    }
+                    mime_type = mime_types.get(cover_file_ext, 'image/jpeg')
+                    
+                    # Use httpx directly with proper headers - use PUT for upsert behavior
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{cover_filename}"
+                        headers = {
+                            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                            "Content-Type": mime_type,
+                            "x-upsert": "true"  # Allow overwriting existing files
+                        }
+                        # Try POST first, if file exists (409), use PUT
+                        response = await client.post(upload_url, content=cover_data, headers=headers)
+                        if response.status_code == 409:  # File already exists
+                            print(f"[UPLOAD] Cover file exists, updating with PUT...")
+                            response = await client.put(upload_url, content=cover_data, headers=headers)
+                        
+                        if response.status_code not in [200, 201]:
+                            print(f"[UPLOAD] Cover upload error: {response.status_code} - {response.text}")
+                        else:
+                            cover_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{cover_filename}"
+                            print(f"[UPLOAD] Cover uploaded successfully: {cover_url}")
+                            print(f"[UPLOAD] Album ID for cover update: {album_id} (type: {type(album_id)})")
+                            
+                            # Update album with cover URL - convert album_id to string for safety
+                            try:
+                                album_id_str = str(album_id)
+                                print(f"[UPLOAD] Updating album {album_id_str} with cover_url: {cover_url}")
+                                update_result = supabase.table("albums").update({
+                                    "cover_url": cover_url
+                                }).eq("id", album_id_str).execute()
+                                print(f"[UPLOAD] Album cover_url update result: {update_result}")
+                                if hasattr(update_result, 'data') and update_result.data:
+                                    print(f"[UPLOAD] Album cover_url update SUCCESS: {update_result.data}")
+                                else:
+                                    print(f"[UPLOAD] Album cover_url update WARNING: No data returned")
+                                    # Try to verify the update
+                                    verify = supabase.table("albums").select("id, cover_url").eq("id", album_id_str).execute()
+                                    print(f"[UPLOAD] Album verification after update: {verify.data}")
+                            except Exception as update_err:
+                                print(f"[UPLOAD] Error updating album cover_url: {update_err}")
+                                import traceback
+                                print(f"[UPLOAD] Update error traceback: {traceback.format_exc()}")
+                except Exception as e:
+                    print(f"[UPLOAD] Error uploading cover: {e}")
+                    import traceback
+                    print(f"[UPLOAD] Cover upload traceback: {traceback.format_exc()}")
+            else:
+                print(f"[UPLOAD] No cover image data available")
+            
+            progress_module.update_progress(upload_id, 85, "capa_carregada")
+            await asyncio.sleep(0.1)
+            
+            # CREATE YOUTUBE VIDEO RECORD if youtube_url is provided
+            if youtube_url:
+                try:
+                    video_id = extract_youtube_video_id(youtube_url)
+                    if video_id:
+                        print(f"[UPLOAD] Processing YouTube video: {youtube_url}")
+                        print(f"[UPLOAD] Extracted video ID: {video_id}")
+                        
+                        # Get YouTube thumbnail
+                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+                        
+                        # Get YouTube video title
+                        video_title = title  # Default to album title
+                        try:
+                            async with httpx.AsyncClient(timeout=10.0) as client:
+                                oembed_response = await client.get(
+                                    f"https://www.youtube.com/oembed?url={youtube_url}&format=json"
+                                )
+                                if oembed_response.status_code == 200:
+                                    oembed_data = oembed_response.json()
+                                    video_title = oembed_data.get("title", title)
+                                    print(f"[UPLOAD] YouTube title fetched: {video_title}")
+                        except Exception as e:
+                            print(f"[UPLOAD] Could not fetch YouTube title: {e}")
+                        
+                        # Create artist_videos record
+                        video_data = {
+                            "artist_id": user_id,
+                            "album_id": album_id,
+                            "video_url": youtube_url,
+                            "video_id": video_id,
+                            "title": video_title,
+                            "thumbnail": thumbnail_url,
+                            "is_public": is_public,  # Se álbum é público, vídeo é público
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }
+                        
+                        print(f"[UPLOAD] Creating video record: {video_data}")
+                        try:
+                            video_response = supabase.table("artist_videos").insert(video_data).execute()
+                            print(f"[UPLOAD] Video response: {video_response}")
+                            if hasattr(video_response, 'data') and video_response.data:
+                                print(f"[UPLOAD] Video record created successfully with ID: {video_response.data[0].get('id')}")
+                            else:
+                                print(f"[UPLOAD] Warning: Video response had no data")
+                        except Exception as e:
+                            print(f"[UPLOAD] Error creating video record: {e}")
+                            import traceback
+                            print(f"[UPLOAD] Video creation traceback: {traceback.format_exc()}")
+                            # Não falhar o upload se o vídeo não for criado
+                    else:
+                        print(f"[UPLOAD] Invalid YouTube URL format: {youtube_url}")
+                except Exception as e:
+                    print(f"[UPLOAD] Error processing YouTube URL: {e}")
+                    import traceback
+                    print(f"[UPLOAD] YouTube processing traceback: {traceback.format_exc()}")
+                    # Não falhar o upload se houve erro processando vídeo
+            
+            progress_module.update_progress(upload_id, 87, "video_youtube_criado")
+            await asyncio.sleep(0.1)
+            
+            # Upload MP3 files and create song records
+            progress_module.update_progress(upload_id, 40, "iniciando_upload_musicas")
+            await asyncio.sleep(0.1)
+            
+            # Log cover_url status
+            if cover_url:
+                print(f"[UPLOAD] Cover successfully uploaded and will be used: {cover_url}")
+            else:
+                print(f"[UPLOAD] WARNING: No cover URL available for songs in this album")
+            
+            songs_created = []
+            total_songs = len(mp3_files)
+            for idx, mp3_file in enumerate(sorted(mp3_files), 1):
+                try:
+                    # Calculate progress: 40-80% for uploads
+                    song_progress = 40 + int((idx / max(total_songs, 1)) * 35)  # 40-75% for uploads
+                    print(f"[UPLOAD] Processing song {idx}/{total_songs}: {mp3_file.name}")
+                    progress_module.update_progress(upload_id, song_progress, f"enviando_musica_{idx}")
+                    await asyncio.sleep(0.05)
+                    
+                    # Read MP3 file
+                    with open(mp3_file, "rb") as f:
+                        mp3_data = f.read()
+                    
+                    print(f"[UPLOAD] Read {len(mp3_data)} bytes for {mp3_file.name}")
+                    
+                    # Clean filename - remove duplicate extensions
+                    clean_filename = mp3_file.stem  # Remove .mp3 if duplicated
+                    if clean_filename.endswith('.mp3'):
+                        clean_filename = clean_filename[:-4]  # Remove another .mp3 if it exists
+                    
+                    # Sanitize for Supabase (remove accents and special chars)
+                    clean_filename = sanitize_filename(clean_filename)
+                    clean_filename = f"{clean_filename}.mp3"
+                    
+                    # Upload to Supabase Storage
+                    # Sanitize album_id in path
+                    safe_album_id = sanitize_filename(str(album_id))
+                    storage_path = f"songs/{safe_album_id}/{idx:02d}_{clean_filename}"
+                    print(f"[UPLOAD] Uploading to: {storage_path}")
+                    
+                    # Use httpx directly with proper headers for MP3 - with retry logic
+                    upload_success = False
+                    max_retries = 5
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            progress_module.update_progress(upload_id, song_progress, f"enviando_musica_{idx}_tentativa_{attempt+1}")
+                            await asyncio.sleep(0.05)
+                            async with httpx.AsyncClient(timeout=120.0) as client:
+                                upload_url = f"{SUPABASE_URL}/storage/v1/object/musica/{storage_path}"
+                                headers = {
+                                    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                                    "Content-Type": "audio/mpeg"
+                                }
+                                response = await client.post(upload_url, content=mp3_data, headers=headers)
+                                if response.status_code not in [200, 201]:
+                                    print(f"[UPLOAD] Upload error (attempt {attempt+1}/{max_retries}): {response.status_code} - {response.text}")
+                                    if attempt < max_retries - 1:
+                                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                                        continue
+                                    raise Exception(f"Upload failed after {max_retries} attempts: {response.text}")
+                                print(f"[UPLOAD] Upload successful: {response.status_code}")
+                                upload_success = True
+                                break
+                        except asyncio.TimeoutError:
+                            print(f"[UPLOAD] Upload timeout (attempt {attempt+1}/{max_retries})")
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2 ** attempt)
+                                continue
+                            raise Exception(f"Upload timeout after {max_retries} attempts")
+                    
+                    if not upload_success:
+                        raise Exception(f"Failed to upload song {idx}")
+                    
+                    # Update progress after successful song upload
+                    progress_module.update_progress(upload_id, song_progress + 1, f"musica_{idx}_concluida")
+                    await asyncio.sleep(0.05)
+                    
+                    # Get public URL
+                    audio_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{storage_path}"
+                    print(f"[UPLOAD] Audio URL: {audio_url}")
+                    
+                    # Create song record
+                    song_data = {
+                        "title": mp3_file.stem,
+                        "album_id": album_id,
+                        "artist_id": user_id,
+                        "artist_name": artist_name,
+                        "album_name": title,
+                        "audio_url": audio_url,
+                        "cover_url": cover_url,  # Use the album cover for each song
+                        "duration": 0,  # TODO: Extract duration from MP3
+                        "track_number": idx,
+                        "genre": genre if genre else None,
+                        "language": "pt-BR",
+                        "explicit_content": False,
+                        "release_year": release_date[:4] if release_date else None,
+                        "release_date": release_date
+                    }
+                    
+                    print(f"[UPLOAD] Inserting song record: {song_data}")
+                    try:
+                        song_response = supabase.table("songs").insert(song_data).execute()
+                        print(f"[UPLOAD] Song insertion response: {song_response}")
+                        if hasattr(song_response, 'data') and song_response.data:
+                            print(f"[UPLOAD] Song data returned: {song_response.data}")
+                    except Exception as song_err:
+                        print(f"[UPLOAD] Error inserting song: {song_err}")
+                        print(f"[UPLOAD] Song error traceback: {traceback.format_exc()}")
+                        raise
+                    
+                    if hasattr(song_response, 'data') and song_response.data and len(song_response.data) > 0:
+                        songs_created.append(song_response.data[0])
+                        print(f"[UPLOAD] Song {idx} created with ID: {song_response.data[0].get('id')}")
+                    else:
+                        print(f"[UPLOAD] Warning: Song {idx} response had no data")
+                        print(f"[UPLOAD] Response object: {song_response}")
+                        print(f"[UPLOAD] Response attributes: {dir(song_response)}")
+                        if hasattr(song_response, 'error'):
+                            print(f"[UPLOAD] Response error: {song_response.error}")
+                    
+                    # Update progress after recording
+                    progress_module.update_progress(upload_id, song_progress + 2, f"musica_{idx}_registrada")
+                    await asyncio.sleep(0.05)
+                    
+                    print(f"[UPLOAD] Song {idx} uploaded: {mp3_file.name}")
+                    
+                except Exception as e:
+                    import traceback
+                    print(f"[UPLOAD] Error uploading song {idx}: {e}")
+                    print(f"[UPLOAD] Error type: {type(e)}")
+                    print(f"[UPLOAD] Traceback: {traceback.format_exc()}")
+                    continue
+            
+            print(f"Created {len(songs_created)} song records")
+            
+            # Update album with song count
+            progress_module.update_progress(upload_id, 75, "atualizando_contagem_musicas")
+            await asyncio.sleep(0.1)
+            print(f"[UPLOAD] Updating album song count to {len(songs_created)}")
+            
+            # Use consistent album_id string conversion
+            album_id_str = str(album_id)
+            
+            # Prepare final update data - include both song_count and cover_url
+            final_album_update = {
+                "song_count": len(songs_created)
+            }
+            
+            # Add cover_url to the update if we have it
+            if cover_url:
+                final_album_update["cover_url"] = cover_url
+                print(f"[UPLOAD] Including cover_url in final update: {cover_url}")
+            
+            try:
+                update_response = supabase.table("albums").update(final_album_update).eq("id", album_id_str).execute()
+                print(f"[UPLOAD] Update response: {update_response}")
+                print(f"[UPLOAD] Update data: {update_response.data if hasattr(update_response, 'data') else 'No data'}")
+                print(f"[UPLOAD] Album successfully updated with song count: {len(songs_created)}")
+                
+                # Verify the update was successful
+                verify_result = supabase.table("albums").select("id, cover_url, song_count").eq("id", album_id_str).execute()
+                if verify_result.data:
+                    saved_cover = verify_result.data[0].get("cover_url")
+                    print(f"[UPLOAD] Verification - cover_url in DB: {saved_cover}")
+                    if cover_url and not saved_cover:
+                        print(f"[UPLOAD] WARNING: cover_url was not saved! Retrying...")
+                        retry_update = supabase.table("albums").update({"cover_url": cover_url}).eq("id", album_id_str).execute()
+                        print(f"[UPLOAD] Retry update result: {retry_update.data if hasattr(retry_update, 'data') else 'No data'}")
+                
+                progress_module.update_progress(upload_id, 80, "contagem_atualizada")
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                import traceback
+                print(f"[UPLOAD] Error updating album: {e}")
+                print(traceback.format_exc())
+            
+            # Mark as complete
+            progress_module.update_progress(upload_id, 90, "finalizando")
+            await asyncio.sleep(0.1)
+            progress_module.update_progress(upload_id, 100, "concluido")
+            await asyncio.sleep(0.05)
+            progress_module.complete_progress(upload_id)
+            
+            return {
+                "success": True,
+                "upload_id": upload_id,
+                "album": {
+                    "id": album_id,
+                    "title": title,
+                    "slug": album_slug,
+                    "cover_url": cover_url,
+                    "songs_count": len(songs_created)
+                },
+                "message": f"Album uploaded successfully with {len(songs_created)} songs"
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            import traceback
+            print(f"Error processing upload: {str(e)}")
+            print(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Error processing upload: {str(e)}")
+        
+        finally:
+            # Cleanup temp directory
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+                print(f"Cleaned up temp directory: {temp_dir}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Error uploading album: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error uploading album: {str(e)}")
