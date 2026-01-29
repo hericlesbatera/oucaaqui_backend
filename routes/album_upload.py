@@ -547,26 +547,42 @@ async def upload_album(request: Request):
                         except Exception as e:
                             print(f"[UPLOAD] Could not fetch YouTube title: {e}")
                         
-                        # Create artist_videos record
+                        # Create artist_videos record usando httpx direto para bypass RLS
                         video_data = {
                             "artist_id": user_id,
-                            "album_id": album_id,
+                            "album_id": str(album_id),
                             "video_url": youtube_url,
                             "video_id": video_id,
                             "title": video_title,
                             "thumbnail": thumbnail_url,
-                            "is_public": is_public,  # Se álbum é público, vídeo é público
+                            "is_public": is_public,
                             "created_at": datetime.now(timezone.utc).isoformat()
                         }
                         
                         print(f"[UPLOAD] Creating video record: {video_data}")
                         try:
-                            video_response = supabase.table("artist_videos").insert(video_data).execute()
-                            print(f"[UPLOAD] Video response: {video_response}")
-                            if hasattr(video_response, 'data') and video_response.data:
-                                print(f"[UPLOAD] Video record created successfully with ID: {video_response.data[0].get('id')}")
-                            else:
-                                print(f"[UPLOAD] Warning: Video response had no data")
+                            # Usar httpx diretamente para garantir que o insert funcione com album_id
+                            async with httpx.AsyncClient(timeout=30.0) as client:
+                                insert_url = f"{SUPABASE_URL}/rest/v1/artist_videos"
+                                headers = {
+                                    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                                    "apikey": SUPABASE_SERVICE_KEY,
+                                    "Content-Type": "application/json",
+                                    "Prefer": "return=representation"
+                                }
+                                response = await client.post(insert_url, json=video_data, headers=headers)
+                                print(f"[UPLOAD] Video insert response status: {response.status_code}")
+                                print(f"[UPLOAD] Video insert response: {response.text}")
+                                
+                                if response.status_code in [200, 201]:
+                                    result_data = response.json()
+                                    if result_data and len(result_data) > 0:
+                                        print(f"[UPLOAD] Video record created successfully with ID: {result_data[0].get('id')}")
+                                        print(f"[UPLOAD] Video album_id saved: {result_data[0].get('album_id')}")
+                                    else:
+                                        print(f"[UPLOAD] Warning: Video insert returned empty array")
+                                else:
+                                    print(f"[UPLOAD] Error inserting video: {response.status_code}")
                         except Exception as e:
                             print(f"[UPLOAD] Error creating video record: {e}")
                             import traceback

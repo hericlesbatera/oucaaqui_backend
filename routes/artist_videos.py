@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import os
-from supabase import create_client
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+import httpx
 
 load_dotenv()
 
@@ -14,8 +14,6 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 router = APIRouter(prefix="/artist-videos", tags=["artist-videos"])
 
@@ -54,19 +52,35 @@ async def add_video(request: AddVideoRequest):
         
         print(f"[ARTIST-VIDEOS] Adding video: {video_data}")
         
-        # Insert into Supabase
-        result = supabase.table("artist_videos").insert(video_data).execute()
-        
-        if hasattr(result, 'data') and result.data:
-            print(f"[ARTIST-VIDEOS] Video added successfully: {result.data}")
-            return {
-                "success": True,
-                "video": result.data[0],
-                "message": "Video added successfully"
+        # Usar httpx diretamente para bypass RLS e garantir que album_id seja salvo
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            insert_url = f"{SUPABASE_URL}/rest/v1/artist_videos"
+            headers = {
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
             }
-        else:
-            print(f"[ARTIST-VIDEOS] No data returned from insert")
-            raise HTTPException(status_code=500, detail="Failed to insert video")
+            response = await client.post(insert_url, json=video_data, headers=headers)
+            
+            print(f"[ARTIST-VIDEOS] Insert response status: {response.status_code}")
+            print(f"[ARTIST-VIDEOS] Insert response: {response.text}")
+            
+            if response.status_code in [200, 201]:
+                result_data = response.json()
+                if result_data and len(result_data) > 0:
+                    print(f"[ARTIST-VIDEOS] Video added successfully: {result_data}")
+                    return {
+                        "success": True,
+                        "video": result_data[0],
+                        "message": "Video added successfully"
+                    }
+                else:
+                    print(f"[ARTIST-VIDEOS] No data returned from insert")
+                    raise HTTPException(status_code=500, detail="Failed to insert video")
+            else:
+                print(f"[ARTIST-VIDEOS] Error inserting video: {response.status_code}")
+                raise HTTPException(status_code=500, detail=f"Failed to insert video: {response.text}")
         
     except HTTPException:
         raise
