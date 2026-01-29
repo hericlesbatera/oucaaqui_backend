@@ -550,8 +550,19 @@ async def upload_album(request: Request):
                 print(f"[UPLOAD] WARNING: No cover URL available for songs in this album")
             
             songs_created = []
-            total_songs = len(mp3_files)
-            for idx, mp3_file in enumerate(sorted(mp3_files), 1):
+            
+            # Sort mp3_files by track number extracted from filename
+            def extract_track_number(file_path):
+                """Extract track number from filename for sorting"""
+                match = re.match(r'^(\d{1,2})\s*[-._]', file_path.stem)
+                if match:
+                    return int(match.group(1))
+                return 999  # Files without number go to the end
+            
+            sorted_mp3_files = sorted(mp3_files, key=extract_track_number)
+            total_songs = len(sorted_mp3_files)
+            
+            for idx, mp3_file in enumerate(sorted_mp3_files, 1):
                 try:
                     # Calculate progress: 40-80% for uploads
                     song_progress = 40 + int((idx / max(total_songs, 1)) * 35)  # 40-75% for uploads
@@ -622,9 +633,24 @@ async def upload_album(request: Request):
                     audio_url = f"{SUPABASE_URL}/storage/v1/object/public/musica/{storage_path}"
                     print(f"[UPLOAD] Audio URL: {audio_url}")
                     
+                    # Extract track number and clean title from filename
+                    # Formats: "01 - Song Name", "1 - Song Name", "01. Song Name", "01_Song Name"
+                    original_title = mp3_file.stem
+                    track_number = idx  # Default to loop index
+                    clean_title = original_title
+                    
+                    # Try to extract track number from filename
+                    track_match = re.match(r'^(\d{1,2})\s*[-._]\s*(.+)$', original_title)
+                    if track_match:
+                        track_number = int(track_match.group(1))
+                        clean_title = track_match.group(2).strip()
+                        print(f"[UPLOAD] Extracted track {track_number}: '{clean_title}' from '{original_title}'")
+                    else:
+                        print(f"[UPLOAD] No track number found in '{original_title}', using index {idx}")
+                    
                     # Create song record
                     song_data = {
-                        "title": mp3_file.stem,
+                        "title": clean_title,
                         "album_id": album_id,
                         "artist_id": user_id,
                         "artist_name": artist_name,
@@ -632,7 +658,7 @@ async def upload_album(request: Request):
                         "audio_url": audio_url,
                         "cover_url": cover_url,  # Use the album cover for each song
                         "duration": 0,  # TODO: Extract duration from MP3
-                        "track_number": idx,
+                        "track_number": track_number,
                         "genre": genre if genre else None,
                         "language": "pt-BR",
                         "explicit_content": False,
