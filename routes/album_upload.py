@@ -319,23 +319,30 @@ async def upload_album(request: Request):
                                 print(f"[UPLOAD] Error reading image: {e}")
             
             # Create album record in Supabase
-            # Generate unique slug: if custom_url provided use it, otherwise use title + full uuid
+            # Generate slug: if custom_url provided use it directly, otherwise use title + uuid
             if custom_url:
-                base_slug = custom_url
+                # Usar a URL personalizada diretamente
+                album_slug = custom_url
+                
+                # Verificar se o slug personalizado já existe
+                existing = supabase.table("albums").select("id").eq("slug", album_slug).execute()
+                if existing.data and len(existing.data) > 0:
+                    # Se já existe, adicionar sufixo UUID
+                    slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
+                    album_slug = f"{custom_url}-{slug_suffix}"
+                    print(f"[UPLOAD] Custom slug already exists, added suffix: {album_slug}")
             else:
+                # Sem URL personalizada, gerar baseado no título + UUID
                 base_slug = title.lower().replace(" ", "-").replace(".", "").replace(",", "")[:30]
-            
-            # Sempre adicionar UUID para garantir unicidade
-            slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
-            album_slug = f"{base_slug}-{slug_suffix}"
-            
-            # Verificar se o slug já existe e gerar um novo se necessário
-            existing = supabase.table("albums").select("id").eq("slug", album_slug).execute()
-            if existing.data and len(existing.data) > 0:
-                # Gerar novo sufixo
                 slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
                 album_slug = f"{base_slug}-{slug_suffix}"
-                print(f"[UPLOAD] Slug already exists, generated new one: {album_slug}")
+                
+                # Verificar se o slug já existe e gerar um novo se necessário
+                existing = supabase.table("albums").select("id").eq("slug", album_slug).execute()
+                if existing.data and len(existing.data) > 0:
+                    slug_suffix = str(uuid.uuid4()).replace("-", "")[:12]
+                    album_slug = f"{base_slug}-{slug_suffix}"
+                    print(f"[UPLOAD] Slug already exists, generated new one: {album_slug}")
             
             # Handle scheduled publishing
             is_scheduled = publish_type == "scheduled"
