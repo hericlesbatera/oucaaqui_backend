@@ -75,9 +75,12 @@ async def upload_album(request: Request):
     Upload a new album with all metadata.
     Extracts ZIP, uploads files to Supabase Storage, and saves metadata.
     """
+    print("[UPLOAD] ========== UPLOAD REQUEST RECEIVED ==========")
     try:
         # Parse form data
+        print("[UPLOAD] Parsing form data...")
         form_data = await request.form()
+        print("[UPLOAD] Form data parsed successfully")
         
         print(f"Form data keys: {list(form_data.keys())}")
         
