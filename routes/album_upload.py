@@ -561,12 +561,14 @@ async def upload_album(request: Request):
             # Sort mp3_files by track number extracted from filename
             def extract_track_number(file_path):
                 """Extract track number from filename for sorting"""
-                match = re.match(r'^(\d{1,2})\s*[-._]', file_path.stem)
+                # Match formats: "01 - Song", "01. Song", "01_Song", "01 Song" (with space only)
+                match = re.match(r'^(\d{1,2})\s*[-._\s]', file_path.stem)
                 if match:
                     return int(match.group(1))
                 return 999  # Files without number go to the end
             
             sorted_mp3_files = sorted(mp3_files, key=extract_track_number)
+            print(f"[UPLOAD] Sorted files order: {[f.name for f in sorted_mp3_files]}")
             total_songs = len(sorted_mp3_files)
             
             for idx, mp3_file in enumerate(sorted_mp3_files, 1):
@@ -641,14 +643,14 @@ async def upload_album(request: Request):
                     print(f"[UPLOAD] Audio URL: {audio_url}")
                     
                     # Extract track number and clean title from filename
-                    # Formats: "01 - Song Name", "1 - Song Name", "01. Song Name", "01_Song Name"
+                    # Formats: "01 - Song Name", "1 - Song Name", "01. Song Name", "01_Song Name", "01 Song Name"
                     original_title = mp3_file.stem
                     track_number = idx  # Default to loop index
                     clean_title = original_title
                     
-                    # Try to extract track number from filename
-                    track_match = re.match(r'^(\d{1,2})\s*[-._]\s*(.+)$', original_title)
-                    if track_match:
+                    # Try to extract track number from filename (including space-only separator)
+                    track_match = re.match(r'^(\d{1,2})\s*[-._]?\s*(.+)$', original_title)
+                    if track_match and track_match.group(2).strip():
                         track_number = int(track_match.group(1))
                         clean_title = track_match.group(2).strip()
                         print(f"[UPLOAD] Extracted track {track_number}: '{clean_title}' from '{original_title}'")
