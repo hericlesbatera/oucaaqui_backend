@@ -1,12 +1,14 @@
 """
-Scheduler para publicação automática de álbuns agendados.
-Verifica a cada minuto se há álbuns com scheduled_publish_at <= agora
-e os publica automaticamente (is_scheduled = False, is_private = False, published_at = agora).
+Scheduler para:
+1. Publicação automática de álbuns agendados.
+2. Exclusão permanente automática de álbuns na lixeira há mais de 30 dias,
+   incluindo remoção dos arquivos do Storage do Supabase (capa + MP3s).
 """
 
 import asyncio
 import os
-from datetime import datetime, timezone
+import httpx
+from datetime import datetime, timezone, timedelta
 from supabase import create_client
 from dotenv import load_dotenv
 
@@ -32,7 +34,6 @@ async def publish_scheduled_albums():
         response = supabase.table("albums") \
             .select("id, title, scheduled_publish_at") \
             .eq("is_scheduled", True) \
-            .eq("is_deleted", False) \
             .lte("scheduled_publish_at", now) \
             .execute()
 
@@ -62,7 +63,106 @@ async def publish_scheduled_albums():
                 print(f"[SCHEDULER] ❌ Erro ao publicar álbum '{album_title}' (ID: {album_id}): {e}")
 
     except Exception as e:
-        print(f"[SCHEDULER] ❌ Erro geral no scheduler: {e}")
+        print(f"[SCHEDULER] ❌ Erro geral no scheduler de publicação: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def delete_storage_files(album_id: str, album_slug: str):
+    """
+    Remove os arquivos do Storage do Supabase para um álbum:
+    - Capa: albums/{slug}/cover.jpg
+    - Áudios: songs/{album_id}/xx_nome.mp3
+    """
+    try:
+        # Buscar as músicas para obter os paths de áudio
+        songs_response = supabase.table("songs") \
+            .select("id, audio_url") \
+            .eq("album_id", album_id) \
+            .execute()
+
+        songs = songs_response.data if songs_response.data else []
+
+        # Extrair paths relativos dos áudios
+        audio_paths = []
+        for song in songs:
+            audio_url = song.get("audio_url", "")
+            if audio_url:
+                # URL: .../storage/v1/object/public/musica/songs/{albumId}/xx_nome.mp3
+                import re
+                match = re.search(r'/musica/(.+)$', audio_url)
+                if match:
+                    audio_paths.append(match.group(1))
+
+        # Remover áudios do Storage
+        if audio_paths:
+            result = supabase.storage.from_("musica").remove(audio_paths)
+            print(f"[SCHEDULER] 🗑 Áudios removidos do Storage ({len(audio_paths)} arquivos) para álbum {album_id}")
+
+        # Remover capa do Storage
+        if album_slug:
+            cover_path = f"albums/{album_slug}/cover.jpg"
+            result = supabase.storage.from_("musica").remove([cover_path])
+            print(f"[SCHEDULER] 🗑 Capa removida do Storage: {cover_path}")
+
+    except Exception as e:
+        print(f"[SCHEDULER] ⚠ Erro ao remover arquivos do Storage para álbum {album_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def cleanup_expired_trash():
+    """
+    Exclui permanentemente álbuns na lixeira há mais de 30 dias,
+    removendo também os arquivos do Storage (capa + MP3s).
+    """
+    try:
+        # Calcular data limite: 30 dias atrás
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        print(f"[SCHEDULER] Verificando lixeira expirada (deleted_at <= {cutoff})...")
+
+        # Buscar álbuns na lixeira há mais de 30 dias
+        response = supabase.table("albums") \
+            .select("id, title, slug") \
+            .not_.is_("deleted_at", "null") \
+            .lte("deleted_at", cutoff) \
+            .execute()
+
+        albums = response.data if response.data else []
+
+        if not albums:
+            print(f"[SCHEDULER] Nenhum álbum expirado na lixeira.")
+            return
+
+        print(f"[SCHEDULER] {len(albums)} álbum(ns) expirado(s) para exclusão permanente!")
+
+        for album in albums:
+            album_id = album["id"]
+            album_title = album["title"]
+            album_slug = album.get("slug", "")
+
+            try:
+                print(f"[SCHEDULER] Excluindo permanentemente: '{album_title}' (ID: {album_id})")
+
+                # 1. Remover arquivos do Storage
+                await delete_storage_files(album_id, album_slug)
+
+                # 2. Deletar músicas do banco
+                supabase.table("songs").delete().eq("album_id", album_id).execute()
+
+                # 3. Deletar vídeos associados
+                supabase.table("artist_videos").delete().eq("album_id", album_id).execute()
+
+                # 4. Deletar o álbum do banco
+                supabase.table("albums").delete().eq("id", album_id).execute()
+
+                print(f"[SCHEDULER] ✅ Álbum excluído permanentemente: '{album_title}' (ID: {album_id})")
+
+            except Exception as e:
+                print(f"[SCHEDULER] ❌ Erro ao excluir álbum '{album_title}' (ID: {album_id}): {e}")
+
+    except Exception as e:
+        print(f"[SCHEDULER] ❌ Erro geral no scheduler de lixeira: {e}")
         import traceback
         traceback.print_exc()
 
@@ -82,6 +182,7 @@ async def run_scheduler():
     while True:
         try:
             await publish_scheduled_albums()
+            await cleanup_expired_trash()
         except Exception as e:
             print(f"[SCHEDULER] Erro inesperado: {e}")
         await asyncio.sleep(60)
