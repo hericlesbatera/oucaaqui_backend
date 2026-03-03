@@ -95,7 +95,9 @@ async def upload_album(request: Request):
         # Fallback para campos antigos (scheduleDate e scheduleTime)
         schedule_date = form_data.get("scheduleDate", "")
         schedule_time = form_data.get("scheduleTime", "")
-        print(f"[UPLOAD] publish_type: {publish_type}, scheduled_publish_at: {scheduled_publish_at_str}")
+        allow_download_str = form_data.get("allowDownload", "true")
+        allow_download = allow_download_str.lower() not in ("false", "0", "no")
+        print(f"[UPLOAD] publish_type: {publish_type}, scheduled_publish_at: {scheduled_publish_at_str}, allow_download: {allow_download}")
         release_date = form_data.get("releaseDate")
         custom_url = form_data.get("customUrl", "").lower().replace(" ", "-") if form_data.get("customUrl") else None
         youtube_url = form_data.get("youtubeUrl")
@@ -442,7 +444,8 @@ async def upload_album(request: Request):
                 "scheduled_publish_at": scheduled_publish_at if is_scheduled else None,
                 "published_at": published_at,
                 "release_date": release_date,
-                "release_year": release_date[:4] if release_date else None
+                "release_year": release_date[:4] if release_date else None,
+                "allow_download": allow_download
             }
             
             # Insert album

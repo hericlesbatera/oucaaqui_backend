@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from routes.scheduler import start_scheduler
 from routes.albums import router as albums_router
 from routes.album_upload import router as album_upload_router
 from routes.upload_progress import router as upload_progress_router
@@ -11,7 +13,15 @@ from routes.album_download import router as album_download_router
 from routes.admin import router as admin_router
 from routes.auth import router as auth_router
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup e shutdown do FastAPI."""
+    # Iniciar scheduler de publicação automática de álbuns agendados
+    start_scheduler()
+    yield
+    # Shutdown (cleanup se necessário)
+
+app = FastAPI(lifespan=lifespan)
 
 # Adicionar CORS middleware
 app.add_middleware(
